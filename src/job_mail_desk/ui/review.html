@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>邮件复核</title>
+    <link rel="stylesheet" href="review.css">
+  </head>
+  <body>
+    <main class="review-workbench">
+      <section class="mail-pane" aria-labelledby="mailSubject">
+        <header class="pane-header">
+          <div>
+            <div class="eyebrow">READ-ONLY IMAP · ORIGINAL MAIL</div>
+            <h1 id="mailSubject">正在读取原邮件…</h1>
+          </div>
+          <button id="remoteImagesButton" type="button" hidden>显式加载 HTTPS 图片</button>
+        </header>
+        <div id="mailMeta" class="mail-meta"></div>
+        <div id="mailStatus" class="mail-status" role="status" aria-live="polite">
+          正在通过只读 IMAP 按定位符读取；正文仅保留在当前窗口内存中。
+        </div>
+        <article id="mailBody" class="mail-body"></article>
+        <pre id="mailText" class="mail-text" hidden></pre>
+      </section>
+
+      <section class="form-pane" aria-labelledby="reviewHeading">
+        <header class="pane-header form-heading">
+          <div>
+            <div class="eyebrow">APPLICATION REVIEW</div>
+            <h2 id="reviewHeading">确认申请与进度</h2>
+          </div>
+          <span id="sessionBadge" class="session-badge">独立窗口</span>
+        </header>
+
+        <p id="identityExplanation" class="identity-explanation"></p>
+        <p id="identitySources" class="identity-explanation"></p>
+        <form id="reviewForm" novalidate>
+          <input type="hidden" name="window_id">
+          <input type="hidden" name="source_hash">
+          <input type="hidden" name="request_id">
+          <input type="hidden" name="expected_review_revision">
+          <input type="hidden" name="expected_application_revision">
+          <input type="hidden" name="application_key">
+          <input type="hidden" name="role_raw">
+          <input type="hidden" name="role_canonical">
+          <input type="hidden" name="location_confidence">
+          <input type="hidden" name="location_source">
+
+          <div class="form-scroll">
+            <section id="recommendation" class="recommendation" aria-live="polite">
+              正在生成建议…
+            </section>
+
+            <fieldset class="mode-picker">
+              <legend>处理方式</legend>
+              <label>
+                <input type="radio" name="mode" value="new_identity">
+                <span><strong>新公司 / 新岗位</strong><small>创建全新的申请身份</small></span>
+              </label>
+              <label>
+                <input type="radio" name="mode" value="new_attempt">
+                <span><strong>新一轮投递</strong><small>保留旧链，创建新的 attempt</small></span>
+              </label>
+              <label>
+                <input type="radio" name="mode" value="update_active">
+                <span><strong>更新进行中申请</strong><small>向当前活跃申请追加节点</small></span>
+              </label>
+              <label>
+                <input type="radio" name="mode" value="update_task">
+                <span><strong>更新已有待办</strong><small>改期 / 改场地类邮件：不新建待办，把邮件里的时间和阶段写进所选待办</small></span>
+              </label>
+              <label>
+                <input type="radio" name="mode" value="reactivate">
+                <span><strong>明确重新激活</strong><small>人工恢复已结束 / 已归档申请</small></span>
+              </label>
+            </fieldset>
+
+            <section class="target-picker">
+              <label for="targetQuery">查找目标申请链</label>
+              <input
+                id="targetQuery"
+                type="search"
+                autocomplete="off"
+                placeholder="公司、岗位、项目、职位编号、地点或阶段"
+              >
+              <div id="lookupStatus" class="lookup-status" aria-live="polite"></div>
+              <select id="targetResults" size="5" aria-label="候选申请链"></select>
+            </section>
+
+            <section id="targetSummary" class="target-summary" hidden></section>
+
+            <section id="existingTaskPicker" class="target-picker" hidden>
+              <label for="existingTaskSelect">要更新的待办</label>
+              <select id="existingTaskSelect" name="task_id" size="4" aria-label="申请链上已有的待办"></select>
+              <input type="hidden" name="expected_task_revision">
+              <div id="existingTaskHint" class="lookup-status" aria-live="polite"></div>
+            </section>
+
+            <div class="field-grid">
+              <label>公司<input name="company" required maxlength="80" autocomplete="off"></label>
+              <label>岗位<input name="role" maxlength="100" autocomplete="off"></label>
+              <label>招聘项目<input name="recruiting_project" maxlength="100"></label>
+              <label>招聘年份<input name="recruiting_year" type="number" min="2000" max="2100"></label>
+              <label>业务单元<input name="business_unit" maxlength="100"></label>
+              <label>职位编号<input name="job_code" maxlength="40"></label>
+              <label class="wide">岗位地点<input name="location" maxlength="100"></label>
+            </div>
+            <label class="task-toggle">
+              <input name="remember_correction" type="checkbox">
+              <span><strong>记住这次身份纠正</strong><small>仅当你明确修改了公司或岗位时启用；普通归属不会训练解析器</small></span>
+            </label>
+
+            <div class="field-grid stage-grid">
+              <label>当前进度
+                <select name="stage">
+                  <option value="网申">网申</option>
+                  <option value="简历筛选">简历筛选</option>
+                  <option value="测评">测评</option>
+                  <option value="笔试">笔试</option>
+                  <option value="一面">一面</option>
+                  <option value="二面">二面</option>
+                  <option value="三面">三面</option>
+                  <option value="HR 面">HR 面</option>
+                  <option value="Offer">Offer 阶段</option>
+                  <option value="已拒绝">已拒绝</option>
+                  <option value="已结束">已结束</option>
+                </select>
+              </label>
+              <label>节点状态
+                <select name="manual_stage_status">
+                  <option value="pending">未完成</option>
+                  <option value="completed">已完成</option>
+                </select>
+              </label>
+              <label>轮次<input name="round" maxlength="40" placeholder="如：二面 / HRBP 面试"></label>
+              <label class="wide">下一步进度
+                <select name="next_stage">
+                  <option value="">等待通知 / 暂未确定</option>
+                  <option value="网申">网申</option>
+                  <option value="简历筛选">简历筛选</option>
+                  <option value="测评">测评</option>
+                  <option value="笔试">笔试</option>
+                  <option value="一面">一面</option>
+                  <option value="二面">二面</option>
+                  <option value="三面">三面</option>
+                  <option value="HR 面">HR 面</option>
+                  <option value="Offer">Offer 阶段</option>
+                  <option value="已拒绝">已拒绝</option>
+                  <option value="已结束">已结束</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="task-toggle" id="createTaskToggle">
+              <input name="create_task" type="checkbox">
+              <span><strong>同时创建待办</strong><small>未勾选时只写入申请时间线节点</small></span>
+            </label>
+
+            <section id="taskFields" class="task-fields" hidden>
+              <div class="field-grid">
+                <label>硬截止日期<input name="deadline_date" type="date"></label>
+                <div class="clock-field">
+                  <span class="clock-field-title">时间</span>
+                  <div class="clock-inputs">
+                    <input name="deadline_hour" type="text" inputmode="numeric"
+                           maxlength="2" placeholder="14" autocomplete="off"
+                           aria-label="小时">
+                    <span class="clock-separator" aria-hidden="true">:</span>
+                    <input name="deadline_minute" type="text" inputmode="numeric"
+                           maxlength="2" placeholder="00" autocomplete="off"
+                           aria-label="分钟">
+                  </div>
+                </div>
+                <label>预计时长（分钟）
+                  <input name="duration_minutes" type="number" min="1" max="1440" readonly>
+                </label>
+                <label>行动链接<input name="source_url" type="url" readonly></label>
+              </div>
+              <label>待办内容
+                <textarea name="action_summary" rows="3" maxlength="240"></textarea>
+              </label>
+              <label>待办备注
+                <textarea name="task_notes" rows="3" maxlength="2000"></textarea>
+              </label>
+            </section>
+
+            <div id="reviewError" class="form-error" role="alert"></div>
+          </div>
+
+          <footer class="sticky-actions">
+            <span id="saveStatus" class="save-status" aria-live="polite"></span>
+            <button id="cancelButton" type="button">取消</button>
+            <button id="saveButton" class="primary" type="submit">确认并保存</button>
+          </footer>
+        </form>
+      </section>
+    </main>
+    <script src="review.js"></script>
+  </body>
+</html>

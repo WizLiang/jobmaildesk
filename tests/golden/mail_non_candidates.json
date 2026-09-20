@@ -1,0 +1,93 @@
+[
+  {
+    "name": "oppo-sms-verification",
+    "subject": "短信验证码",
+    "sender": "OPPO校招 <noreply@example.invalid>",
+    "body": "验证码用于登录。页脚：OPPO校园招聘。",
+    "reason": "security-code"
+  },
+  {
+    "name": "horizon-activation-code",
+    "subject": "北京地平线信息技术有限公司招聘官网注册邮箱激活码：466576",
+    "sender": "Recruit <noreply@example.invalid>",
+    "body": "请使用激活码完成注册。",
+    "reason": "security-code"
+  },
+  {
+    "name": "hesai-interview-survey",
+    "subject": "上海禾赛科技有限公司面试满意度问卷",
+    "sender": "禾赛科技 <noreply@example.invalid>",
+    "body": "请填写面试体验问卷。",
+    "reason": "post-interview-survey"
+  },
+  {
+    "name": "alibaba-campus-livestream",
+    "subject": "今晚19:00开播｜阿里巴巴2027届校招首场业务空宣：基础设施&芯片专场",
+    "sender": "阿里集团校园招聘组 <noreply@example.invalid>",
+    "body": "欢迎观看校园招聘业务空宣。",
+    "reason": "recruiting-marketing"
+  },
+  {
+    "name": "onsite-career-fair",
+    "subject": "【示例科技专场宣讲会】9月21日18:30！现场面试直通Offer",
+    "sender": "招聘服务 <noreply@example.invalid>",
+    "body": "宣讲时间：2026年9月21日18:30。地点：示例大学教学楼301。欢迎携带简历，现场面试直通Offer。",
+    "reason": "recruiting-marketing"
+  },
+  {
+    "name": "bank-recommendation",
+    "subject": "同学您好【智联推荐】【示例银行2027校园招聘邀您投递！】",
+    "sender": "招聘服务 <noreply@example.invalid>",
+    "body": "金融人才岗位招聘，网申投递时间：即日起至10月31日24点。欢迎投递简历。",
+    "reason": "recruiting-marketing"
+  },
+  {
+    "name": "campus-launch",
+    "subject": "示例通信2027校招全面启动！",
+    "sender": "招聘服务 <noreply@example.invalid>",
+    "body": "岗位名称：软件工程师。工作地点：南京。请在10月1日前申请，招聘流程为网申、笔试、面试、offer。",
+    "reason": "recruiting-marketing"
+  },
+  {
+    "name": "campus-registration",
+    "subject": "【智联推荐】示例集团校园招聘火热报名中！",
+    "sender": "招聘服务 <noreply@example.invalid>",
+    "body": "同学您好，期待你的加入。点击立即报名。",
+    "reason": "recruiting-marketing"
+  },
+  {
+    "name": "resume-invitation",
+    "subject": "示例半导体2027校园招聘邀您投递简历",
+    "sender": "招聘服务 <noreply@example.invalid>",
+    "body": "应聘岗位：数字工程师。欢迎投递。",
+    "reason": "recruiting-marketing"
+  },
+  {
+    "name": "body-only-session",
+    "subject": "【示例医疗】2027届校园招聘",
+    "sender": "招聘服务 <noreply@example.invalid>",
+    "body": "邀请您参加线下宣讲会。时间：2026年9月22日下午2点至4点。地点：示例大学教学楼518室。",
+    "reason": "recruiting-marketing"
+  },
+  {
+    "name": "generic-personal-salutation",
+    "subject": "同学您好，示例企业宣讲会邀约",
+    "sender": "招聘服务 <noreply@example.invalid>",
+    "body": "诚挚邀请您参加校园宣讲会，届时组织现场笔试，签到有礼。",
+    "reason": "recruiting-marketing"
+  },
+  {
+    "name": "recruitment-bulletin",
+    "subject": "示例集团2027校园招聘公告",
+    "sender": "招聘服务 <noreply@example.invalid>",
+    "body": "软件、硬件岗位招聘，10月1日截止投递。",
+    "reason": "recruiting-marketing"
+  },
+  {
+    "name": "conditional-application-in-broadcast",
+    "subject": "示例科技校园招聘火热报名中",
+    "sender": "招聘服务 <noreply@example.invalid>",
+    "body": "宣讲时间：9月22日14:00。若您已投递简历，请忽略本次宣传。",
+    "reason": "recruiting-marketing"
+  }
+]
