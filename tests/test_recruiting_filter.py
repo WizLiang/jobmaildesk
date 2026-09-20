@@ -1,3 +1,4 @@
+from job_mail_desk.credentials import MailCredential
 from dataclasses import replace
 from datetime import datetime, timedelta
 import json
@@ -82,7 +83,7 @@ def test_upgrade_withdraws_only_complete_pending_broadcasts(
                        "DASHBOARD_FILE": "dashboard.md", "DICTIONARIES_DIR": "dict"}.items():
         monkeypatch.setattr(scanner, name, tmp_path / path)
     monkeypatch.setattr(scanner, "ImapReader", Reader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "ActivityStore", lambda path: activities)
     monkeypatch.setattr(scanner, "_learn_from_confirmed_records", lambda *a, **kw: {})
     scanner.scan_once(Settings(), shadow=shadow)
@@ -91,7 +92,7 @@ def test_upgrade_withdraws_only_complete_pending_broadcasts(
         assert actual.status == "filtered"
         assert actual.reason == "recruiting-marketing"
         assert actual.revision == old.revision + 1
-        assert actual.parser_version == scanner.PARSER_VERSION
+        assert actual.parser_version == scanner.parser_version_for_settings(Settings())
         assert StateStore(tmp_path / "state.db").outcome(source_hash).outcome == "filtered"
         assert activities.unique_unread_count() == 1
         # A subsequent replay cannot revive it or generate new cards.
@@ -154,7 +155,7 @@ def test_scan_policy_toggle_replays_filtered_records_but_never_manual_ignores(tm
                        "DASHBOARD_FILE": "dashboard.md", "DICTIONARIES_DIR": "dict"}.items():
         monkeypatch.setattr(scanner, name, tmp_path / path)
     monkeypatch.setattr(scanner, "ImapReader", Reader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "_learn_from_confirmed_records", lambda *a, **kw: {})
     off, on = Settings(), Settings(include_onsite_sessions=True)
     summary = scanner.scan_once(off)
@@ -210,7 +211,7 @@ def test_prior_rc_auto_filter_migrates_without_reviving_manual_ignore(tmp_path, 
                        "DASHBOARD_FILE": "dashboard.md", "DICTIONARIES_DIR": "dict"}.items():
         monkeypatch.setattr(scanner, name, tmp_path / path)
     monkeypatch.setattr(scanner, "ImapReader", Reader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "_learn_from_confirmed_records", lambda *a, **kw: {})
     scanner.scan_once(Settings(include_onsite_sessions=True))
     expected = "pending" if automatic else "ignored"
@@ -263,7 +264,7 @@ def test_first_scan_and_upgrade_recognise_personal_mail_older_than_48_hours(tmp_
                        "DASHBOARD_FILE": "dashboard.md", "DICTIONARIES_DIR": "dict"}.items():
         monkeypatch.setattr(scanner, name, tmp_path / path)
     monkeypatch.setattr(scanner, "ImapReader", Reader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "_learn_from_confirmed_records", lambda *a, **kw: {})
     summary = scanner.scan_once(Settings())
     assert summary.fetched == 1 and summary.candidates == 1 and summary.skipped == 0

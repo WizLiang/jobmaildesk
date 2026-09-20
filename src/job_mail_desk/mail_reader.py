@@ -722,6 +722,7 @@ class ImapReader:
         self.settings = settings
         self.credential = credential
         self.runtime_control = runtime_control
+        self.scan_started_at: datetime | None = None
 
     def _client(self):
         client_type = (
@@ -801,10 +802,13 @@ class ImapReader:
     def fetch_batch_since(self, days: int | None = None) -> MailFetchBatch:
         from .scan_progress import report_progress, track_items
         lookback = days if days is not None else self.settings.lookback_days
-        if not 1 <= lookback <= 365:
-            raise ValueError("邮箱扫描范围必须为 1–365 天。")
-        cutoff = datetime.now(SHANGHAI) - timedelta(days=lookback)
-        since_date: date = datetime.now(SHANGHAI).date() - timedelta(days=lookback)
+        scan_now = self.scan_started_at or datetime.now(SHANGHAI)
+        # Interactive requests remain bounded by their callers. Automatic
+        # catch-up may exceed a year and must not silently discard that gap.
+        if type(lookback) is not int or not 1 <= lookback < scan_now.toordinal():
+            raise ValueError("邮箱扫描范围必须为有效的正整数天数。")
+        cutoff = scan_now - timedelta(days=lookback)
+        since_date: date = cutoff.date()
         records: list[MailRecord] = []
         searched_uids: tuple[str, ...] = ()
         fetch_failed_uids: list[str] = []
