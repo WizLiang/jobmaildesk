@@ -465,6 +465,8 @@ class DesktopApi:
         self._runtime_control = runtime_control or RuntimeControl()
         self._on_privacy_reset = on_privacy_reset
         self._privacy_reset_lock = threading.Lock()
+        from .github_updates import UpdateService
+        self._github_updater = UpdateService(LOCAL_ROOT)
         self._review_windows: ReviewWindowController | None = None
         self._window: Any = None
         self._scan_lock = self._runtime_control.scan_lock
@@ -776,6 +778,9 @@ class DesktopApi:
             "config_path": str(CONFIG_PATH),
             "research_enabled": self._settings.research_enabled,
             "app_version": __version__,
+            "github_updates_enabled": self._settings.github_updates_enabled,
+            "update_channel": self._settings.update_channel,
+            "github_update_supported": sys.platform == "win32",
             "reminders_enabled": self._settings.reminders_enabled,
             "reminder_offsets_minutes": list(
                 self._settings.reminder_offsets_minutes
@@ -794,6 +799,35 @@ class DesktopApi:
                 getattr(self, "_close_to_tray_installed", False)
             ),
         }
+
+    def github_update_status(self) -> dict[str, object]:
+        return self._github_updater.snapshot()
+
+    def check_github_update(self, channel: str = "preview", automatic: bool = False) -> dict[str, object]:
+        if sys.platform != "win32":
+            raise ValueError("当前更新功能仅支持 Windows。")
+        if automatic and not self._settings.github_updates_enabled:
+            return self._github_updater.snapshot()
+        with self._privacy_reset_lock:
+            self._runtime_control.raise_if_stopping()
+            return self._github_updater.check(self._settings.update_channel if automatic else channel, automatic=automatic)
+
+    def download_github_update(self) -> dict[str, object]:
+        with self._privacy_reset_lock:
+            self._runtime_control.raise_if_stopping()
+            return self._github_updater.download()
+
+    def install_github_update(self, confirmed: bool = False) -> dict[str, object]:
+        with self._privacy_reset_lock:
+            self._runtime_control.raise_if_stopping()
+            if (LOCAL_ROOT / ".privacy-reset.json").exists() or (LOCAL_ROOT / ".storage-move.json").exists():
+                raise ValueError("请先完成个人信息清除或数据迁移。")
+            return self._github_updater.install(confirmed, self._on_privacy_reset)
+
+    def open_github_releases(self) -> bool:
+        from .github_updates import RELEASES_URL
+        webbrowser.open(RELEASES_URL)
+        return True
 
     def select_storage_location(self) -> str:
         if not self._window:
@@ -814,6 +848,8 @@ class DesktopApi:
         from .storage_location import start_move
         with self._privacy_reset_lock:
             self._runtime_control.raise_if_stopping()
+            if self._github_updater.snapshot()["busy"]:
+                raise ValueError("请等待程序更新操作结束后再迁移数据。")
             start_move(LOCAL_ROOT, Path(destination))
             self._runtime_control.begin_stop()
             timer = threading.Timer(0.5, self._on_privacy_reset)
@@ -827,6 +863,8 @@ class DesktopApi:
             raise RuntimeError("请从桌面程序的设置页执行清除。")
         with self._privacy_reset_lock:
             self._runtime_control.raise_if_stopping()
+            if self._github_updater.snapshot()["busy"]:
+                raise ValueError("请等待程序更新操作结束后再清除个人信息。")
             request_reset(LOCAL_ROOT, confirmation, self._settings)
             self._runtime_control.begin_stop()
             # Give the bridge time to display the pending state before closing.

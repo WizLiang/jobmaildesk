@@ -128,4 +128,5 @@ def test_legacy_update_settings_cannot_enable_removed_component(tmp_path):
     assert not (root / "updates.py").exists()
     for filename in ("index.html", "app.js"):
         text = (root / "ui" / filename).read_text(encoding="utf-8")
-        assert "github" not in text.lower() and "checkForUpdates" not in text
+        assert "checkForUpdates" not in text
+        assert "Chpeeeeea/job-mail-desk" not in text

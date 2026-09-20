@@ -198,6 +198,7 @@ def test_desktop_request_stops_runtime_and_schedules_exit(monkeypatch):
     api = object.__new__(DesktopApi)
     import threading
     api._privacy_reset_lock = threading.Lock()
+    api._github_updater = SimpleNamespace(snapshot=lambda: {"busy": False})
     api._runtime_control = RuntimeControl()
     api._settings = Settings()
     api._on_privacy_reset = lambda: events.append("exit")

@@ -2423,3 +2423,7 @@ footer {
 .ignored-review-row { border-top: 1px solid #d6cfc4; padding: 12px 0; }
 .ignored-review-row strong { display: block; overflow-wrap: anywhere; }
 .ignored-review-row p { margin: 6px 0; }
+#githubUpdateNotes { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; font: inherit; }
+.github-update-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.github-update-actions button { border: 1px solid var(--line); border-radius: 8px; background: var(--paper-raised); color: var(--ink); padding: 8px 12px; }
+#githubUpdateProgress { width: 100%; }

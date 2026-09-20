@@ -29,4 +29,4 @@ JobMailDesk is local-first.
 - Obsidian export is optional. Sender and private-link export are disabled by
   default because a chosen vault may sync to a cloud provider.
 - Scan progress stores only stage names, aggregate counts and the lookback window in memory. It does not include email subjects, bodies, addresses or credentials.
-- This local edition has no update checker, release announcements or download-page integration. Legacy update settings are ignored.
+- The Windows updater reads public releases only from WizLiang/jobmaildesk on GitHub. Manual checks and downloads contact GitHub and its asset CDN without an account token, mailbox address, message data, or machine identifier. GitHub still receives ordinary network metadata such as the connection IP address. Daily checks are opt-in; downloading and restarting require user action. Legacy upstream update settings remain disabled.

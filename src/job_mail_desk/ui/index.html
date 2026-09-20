@@ -29,6 +29,7 @@
     </section>
 
     <section class="notice-stack">
+      <button type="button" id="githubUpdateNotice" class="secondary-wide" hidden>发现新版，查看更新</button>
       <div id="urgentStrip" class="urgent-strip hidden"></div>
       <details id="scanResult" class="scan-result" hidden>
         <summary id="scanResultLabel"></summary><p id="scanResultDetail"></p>
@@ -542,6 +543,23 @@
           <p id="closeHidesHint" class="hidden">点窗口右上角「×」只会把窗口隐藏到托盘，程序继续在后台扫描和提醒；彻底退出请用托盘菜单「退出」。</p>
         </section>
 
+        <section id="githubUpdateSection" class="settings-section hidden">
+          <h3>程序更新</h3>
+          <p>从 WizLiang/jobmaildesk 的 GitHub 发布获取 Windows 更新。检查不发送邮箱或求职数据。</p>
+          <label class="toggle-label"><input name="github_updates_enabled" type="checkbox">每天检查一次新版（仅提示）</label>
+          <label>更新通道<select name="update_channel"><option value="preview">试用版与正式版</option><option value="stable">仅正式版</option></select></label>
+          <p id="githubUpdateStatus" role="status" aria-live="polite">尚未检查更新</p>
+          <progress id="githubUpdateProgress" hidden></progress>
+          <details id="githubUpdateNotesPanel" hidden><summary>新版说明</summary><pre id="githubUpdateNotes"></pre></details>
+          <div class="github-update-actions">
+            <button type="button" id="checkGithubUpdate">检查更新</button>
+            <button type="button" id="downloadGithubUpdate" hidden>下载新版</button>
+            <button type="button" id="installGithubUpdate" hidden>重启并更新…</button>
+            <button type="button" id="openGithubReleases">打开发布页</button>
+          </div>
+          <p>更新保留数据位置与邮箱凭据。无法自动替换时，可从发布页下载并手动解压。</p>
+        </section>
+
         <section id="privacyResetSection" class="settings-section hidden">
           <h3>个人信息</h3>
           <p>永久清除本机邮箱账号与授权码、私人链接密钥、求职记录、简报、学习规则、配置、缓存和日志。清除后自动重新打开程序，需要重新配置邮箱。</p>
@@ -554,6 +572,14 @@
           <button type="submit" class="primary">保存并应用</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="githubUpdateDialog" class="mail-tools-dialog" aria-labelledby="githubUpdateTitle">
+      <h2 id="githubUpdateTitle">重启并更新程序？</h2>
+      <p>程序将退出，替换程序文件并重新打开。邮箱凭据和所选数据目录保持不变；旧程序目录会保留在旁边供回退。</p>
+      <p>请先保存正在编辑的内容。若替换失败，将尝试恢复旧程序。</p>
+      <p id="githubInstallStatus" role="alert"></p>
+      <div class="dialog-actions"><button type="button" id="cancelGithubInstall">取消</button><button type="button" id="confirmGithubInstall" class="primary">确认重启更新</button></div>
     </dialog>
 
     <dialog id="storageMoveDialog" class="settings-dialog" aria-labelledby="storageMoveTitle">

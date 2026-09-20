@@ -486,3 +486,11 @@
 - 2026-09-20 待处理工具：确认原因由结构化 reason/source 元数据生成，不保存原邮件正文。单次补扫显式传入范围并允许窗口内 pending 重识别，不能只扩大 IMAP 下载窗口；人工终态优先。
 - 手动恢复通过 ignored→pending 的显式服务入口，提升 revision，清理旧 ID 和定位符 ID 对应的 ignored 索引；遇 resolved/tombstoned 索引拒绝恢复。先更新可重建索引，再保存 Markdown；保存失败时 ignored 事实仍优先，下次扫描修正索引。manual_restore 标记防止后续自动过滤或重放覆盖，且不制造永久的解析升级重放债务。
 - 新工具栏放在卡片滚动区内，避免改变主窗口 grid 行分配；跨页签复用同一 DOM 节点保留事件绑定。
+
+## 2026-09-20 本仓库 Windows 更新
+
+- 用户重新授权添加 GitHub 更新；独立 github_updates 开关默认关闭，历史上游开关仍无效。只读取 WizLiang/jobmaildesk 公开 Release，不需要客户端 GitHub 凭据。
+- RC 与正式通道分别筛选版本，资产必须是匹配版本的 Windows ZIP 和 SHA-256。检查、下载在后台执行；说明用 textContent 展示。
+- Windows ZipInfo 会规范化反斜杠，路径检查必须使用 orig_filename。拒绝穿越、设备名、大小写重复、链接和超限解压。
+- 先校验、解压并自检，再等待旧进程退出后替换同级目录。Directory.Move 避免把目录意外嵌套到已有目标；失败尝试回退，保留备份。
+- 与清除个人信息、迁移数据操作互斥；程序与数据重叠或有额外文件夹时拒绝自动替换。原生 helper 测试实际执行文件移动，进程启动使用替身。

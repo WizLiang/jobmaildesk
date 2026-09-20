@@ -50,6 +50,7 @@ hiddenimports = (
 
 datas = (
     [
+        ("src/job_mail_desk/apply_update.ps1", "job_mail_desk"),
         ("src/job_mail_desk/ui", "job_mail_desk/ui"),
         ("src/job_mail_desk/identity_data", "job_mail_desk/identity_data"),
         # Shipped so ``JobMailDesk-cli.exe smoke`` can replay the identity

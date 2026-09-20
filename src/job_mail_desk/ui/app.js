@@ -2796,6 +2796,10 @@ async function showSettingsDialog(firstRun = false, payload = null) {
   settingsForm.elements.poll_minutes.value = settings.poll_minutes || 10;
   settingsForm.elements.lookback_days.value = settings.lookback_days || 3;
   settingsForm.elements.include_onsite_sessions.checked = Boolean(settings.include_onsite_sessions);
+  settingsForm.elements.github_updates_enabled.checked = Boolean(settings.github_updates_enabled);
+  settingsForm.elements.update_channel.value = settings.update_channel || "preview";
+  document.querySelector("#githubUpdateSection").classList.toggle("hidden", !settings.github_update_supported);
+  if (settings.github_update_supported) refreshGithubUpdate();
   settingsForm.elements.obsidian_enabled.checked = Boolean(settings.obsidian_enabled);
   settingsForm.elements.obsidian_output.value = settings.obsidian_output || "";
   settingsForm.elements.progress_enabled.checked = Boolean(settings.progress_enabled);
@@ -2860,6 +2864,8 @@ function settingsPayload() {
     poll_minutes: Number(settingsForm.elements.poll_minutes.value),
     lookback_days: Number(settingsForm.elements.lookback_days.value),
     include_onsite_sessions: settingsForm.elements.include_onsite_sessions.checked,
+    github_updates_enabled: settingsForm.elements.github_updates_enabled.checked,
+    update_channel: settingsForm.elements.update_channel.value,
     obsidian_enabled: settingsForm.elements.obsidian_enabled.checked,
     obsidian_output: settingsForm.elements.obsidian_output.value.trim(),
     progress_enabled: settingsForm.elements.progress_enabled.checked,
@@ -3239,6 +3245,10 @@ async function initializeApp() {
   await refresh();
   const settings = await window.pywebview.api.get_app_settings();
   state.persistedFontScale = settings.ui_font_scale || 108;
+  if (settings.github_update_supported) {
+    await window.pywebview.api.check_github_update(settings.update_channel || "preview", true);
+    refreshGithubUpdate();
+  }
   applyFontScale(state.persistedFontScale);
   if (!settings.credential_configured) await showSettingsDialog(true, settings);
 }
@@ -3833,6 +3843,71 @@ document.querySelectorAll("dialog").forEach((dialog) => {
   });
 });
 cards.addEventListener("focusout", scheduleDeferredRefresh);
+
+let githubUpdatePoll = null;
+async function refreshGithubUpdate() {
+  if (!apiReady()) return;
+  clearTimeout(githubUpdatePoll);
+  try {
+    const result = await window.pywebview.api.github_update_status();
+    const status = document.querySelector("#githubUpdateStatus");
+    status.textContent = result.message;
+    const progress = document.querySelector("#githubUpdateProgress");
+    progress.hidden = result.status !== "downloading";
+    if (result.total > 0) { progress.max = result.total; progress.value = result.downloaded; }
+    else progress.removeAttribute("value");
+    document.querySelector("#githubUpdateNotes").textContent = result.notes || "";
+    document.querySelector("#githubUpdateNotesPanel").hidden = !result.notes;
+    document.querySelector("#checkGithubUpdate").disabled = result.busy;
+    document.querySelector("#downloadGithubUpdate").hidden = !["available", "error"].includes(result.status) || !result.latest_version;
+    document.querySelector("#downloadGithubUpdate").disabled = result.busy;
+    document.querySelector("#installGithubUpdate").hidden = result.status !== "ready";
+    document.querySelector("#installGithubUpdate").disabled = result.busy;
+    const notice = document.querySelector("#githubUpdateNotice");
+    notice.hidden = !result.latest_version;
+    notice.textContent = result.status === "ready" ? "新版已下载，查看更新" : `发现新版 ${result.latest_version}，查看更新`;
+    if (result.busy) githubUpdatePoll = setTimeout(refreshGithubUpdate, 600);
+  } catch (error) {
+    document.querySelector("#githubUpdateStatus").textContent = error?.message || "读取更新状态失败";
+  }
+}
+async function githubUpdateAction(action) {
+  try { await action(); await refreshGithubUpdate(); }
+  catch (error) { document.querySelector("#githubUpdateStatus").textContent = error?.message || "更新操作失败"; }
+}
+document.querySelector("#checkGithubUpdate").addEventListener("click", () => githubUpdateAction(
+  () => window.pywebview.api.check_github_update(settingsForm.elements.update_channel.value, false)));
+document.querySelector("#downloadGithubUpdate").addEventListener("click", () => githubUpdateAction(
+  () => window.pywebview.api.download_github_update()));
+document.querySelector("#openGithubReleases").addEventListener("click", () => githubUpdateAction(
+  () => window.pywebview.api.open_github_releases()));
+document.querySelector("#githubUpdateNotice").addEventListener("click", async () => {
+  await showSettingsDialog();
+  document.querySelector("#githubUpdateSection").scrollIntoView({block: "center"});
+});
+document.querySelector("#installGithubUpdate").addEventListener("click", () => {
+  document.querySelector("#githubInstallStatus").textContent = "";
+  document.querySelector("#githubUpdateDialog").showModal();
+});
+document.querySelector("#cancelGithubInstall").addEventListener("click", () => document.querySelector("#githubUpdateDialog").close());
+document.querySelector("#confirmGithubInstall").addEventListener("click", async (event) => {
+  event.target.disabled = true;
+  document.querySelector("#githubInstallStatus").textContent = "正在准备替换程序文件…";
+  try {
+    await window.pywebview.api.install_github_update(true);
+    document.querySelector("#githubInstallStatus").textContent = "正在重启更新…";
+  } catch (error) {
+    document.querySelector("#githubInstallStatus").textContent = error?.message || "无法自动更新，请打开发布页手动更新。";
+    event.target.disabled = false;
+  }
+});
+setInterval(async () => {
+  if (!apiReady()) return;
+  try {
+    await window.pywebview.api.check_github_update("preview", true);
+    refreshGithubUpdate();
+  } catch (_) { /* Updates must never interrupt mail or task operations. */ }
+}, 3600000);
 
 window.addEventListener("pywebviewready", initializeApp);
 setTimeout(initializeApp, 800);

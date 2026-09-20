@@ -163,7 +163,8 @@ class Settings:
     ui_font_scale: int = 108
     always_on_top: bool = True
     start_hidden: bool = False
-    updates_enabled: bool = False  # Legacy config compatibility; no updater is shipped.
+    updates_enabled: bool = False  # Old upstream updater remains disabled.
+    github_updates_enabled: bool = False
     update_channel: str = "preview"
     reminders_enabled: bool = True
     reminder_offsets_minutes: tuple[int, ...] = (1440, 120, 30)
@@ -333,6 +334,7 @@ def load_settings(path: Path | None = None) -> Settings:
         always_on_top=bool(ui.get("always_on_top", True)),
         start_hidden=bool(ui.get("start_hidden", False)),
         updates_enabled=False,
+        github_updates_enabled=bool(payload.get("github_updates", {}).get("enabled", False)),
         update_channel=update_channel,
         reminders_enabled=bool(reminders.get("enabled", True)),
         reminder_offsets_minutes=tuple(
@@ -407,6 +409,9 @@ taskbar_button = {str(settings.taskbar_button).lower()}
 [updates]
 enabled = false
 channel = "{_toml_string(settings.update_channel)}"
+
+[github_updates]
+enabled = {str(settings.github_updates_enabled).lower()}
 
 [reminders]
 enabled = {str(settings.reminders_enabled).lower()}
@@ -530,6 +535,7 @@ def settings_from_payload(
             min(125, int(payload.get("ui_font_scale") or current.ui_font_scale)),
         ),
         updates_enabled=False,
+        github_updates_enabled=_coerce_bool(payload.get("github_updates_enabled", current.github_updates_enabled), current.github_updates_enabled),
         update_channel=update_channel,
         reminders_enabled=bool(
             payload.get("reminders_enabled", current.reminders_enabled)
