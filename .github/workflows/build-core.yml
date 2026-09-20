@@ -1,0 +1,153 @@
+name: Build JobMailDesk Core
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_macos:
+        description: Also validate the optional macOS builds
+        type: boolean
+        default: false
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - agent/**
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --group dev
+      - name: Verify version consistency
+        run: uv run --frozen python scripts/version.py check
+      - id: version
+        shell: pwsh
+        run: |
+          $version = uv run python -c "from job_mail_desk import __version__; print(__version__)"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Tag $env:GITHUB_REF_NAME does not match package version v$version"
+          }
+      - run: uv run pytest
+      - shell: pwsh
+        run: ./scripts/secret-scan.ps1
+      - shell: pwsh
+        run: ./scripts/build.ps1 -OutputRoot "$PWD/release" -SkipTests -SkipSecretScan
+      - name: Verify clean Windows bundle
+        shell: pwsh
+        run: |
+          $env:JOBMAILDESK_LOCAL_ROOT = "$env:RUNNER_TEMP/jobmaildesk-smoke"
+          & ./release/JobMailDesk/JobMailDesk-cli.exe smoke --expect-tasks 0 --expect-applications 0 --expect-unresolved 0 --report "$env:RUNNER_TEMP/jobmaildesk-smoke.json"
+          if ($LASTEXITCODE -ne 0) { throw "Bundle smoke test failed" }
+      - shell: pwsh
+        run: ./scripts/package-core.ps1 -ExePath "$PWD/release/JobMailDesk" -Version "${{ steps.version.outputs.version }}" -OutputDirectory "$PWD/release"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: JobMailDesk-Core-v${{ steps.version.outputs.version }}-win-x64
+          path: |
+            release/JobMailDesk-Core-v${{ steps.version.outputs.version }}-win-x64.zip
+            release/JobMailDesk-Core-v${{ steps.version.outputs.version }}-win-x64.zip.sha256
+          if-no-files-found: error
+
+  macos:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_macos
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --group dev
+      - name: Verify version consistency
+        run: uv run --frozen python scripts/version.py check
+      - id: version
+        run: |
+          version="$(uv run python -c 'from job_mail_desk import __version__; print(__version__)')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version v$version" >&2
+            exit 1
+          fi
+      - run: uv run pytest
+      - name: Build macOS app
+        run: uv run python packaging/macos/setup.py py2app --dist-dir packaging/macos/dist
+      - name: Package app
+        run: |
+          built_app="$(find packaging/macos/dist -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$built_app"
+          if [ "$built_app" != "packaging/macos/dist/JobMailDesk.app" ]; then
+            mv "$built_app" packaging/macos/dist/JobMailDesk.app
+          fi
+          plutil -lint packaging/macos/dist/JobMailDesk.app/Contents/Info.plist
+          test -n "$(find packaging/macos/dist/JobMailDesk.app/Contents/MacOS -type f -perm -111 -print -quit)"
+          mkdir -p release
+          ditto -c -k --sequesterRsrc --keepParent packaging/macos/dist/JobMailDesk.app "release/JobMailDesk-Core-v${{ steps.version.outputs.version }}-macos-${{ matrix.arch }}.zip"
+          shasum -a 256 "release/JobMailDesk-Core-v${{ steps.version.outputs.version }}-macos-${{ matrix.arch }}.zip" > "release/JobMailDesk-Core-v${{ steps.version.outputs.version }}-macos-${{ matrix.arch }}.zip.sha256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: JobMailDesk-Core-v${{ steps.version.outputs.version }}-macos-${{ matrix.arch }}
+          path: |
+            release/JobMailDesk-Core-v${{ steps.version.outputs.version }}-macos-${{ matrix.arch }}.zip
+            release/JobMailDesk-Core-v${{ steps.version.outputs.version }}-macos-${{ matrix.arch }}.zip.sha256
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - windows-x64
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: '*-win-x64'
+          path: release
+          merge-multiple: true
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="docs/RELEASE_NOTES_${GITHUB_REF_NAME}.md"
+          acceptance="docs/ACCEPTANCE_${GITHUB_REF_NAME}.md"
+          test -f "$notes"
+          test -f "$acceptance"
+          test "$(find release -maxdepth 1 -type f | wc -l | tr -d ' ')" -eq 2
+          version="${GITHUB_REF_NAME#v}"
+          for platform in win-x64; do
+            archive="release/JobMailDesk-Core-v${version}-${platform}.zip"
+            checksum="${archive}.sha256"
+            test -f "$archive"
+            test -f "$checksum"
+            expected="$(awk '{print $1}' "$checksum")"
+            actual="$(sha256sum "$archive" | awk '{print $1}')"
+            test "$expected" = "$actual"
+          done
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "JobMailDesk Core $GITHUB_REF_NAME" \
+            --notes-file "$notes" \
+            --prerelease \
+            --verify-tag

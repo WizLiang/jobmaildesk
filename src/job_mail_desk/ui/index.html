@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>JobMailDesk</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <header class="topbar native-drag pywebview-drag-region" title="按住空白处拖动窗口">
+      <div class="brand">
+        <div class="eyebrow">LOCAL JOB DESK</div>
+        <h1>求职纸片</h1>
+      </div>
+      <div class="top-actions">
+        <button type="button" id="addButton" class="icon-button" title="新建" aria-label="新建">＋</button>
+        <button type="button" id="settingsButton" class="icon-button" title="设置" aria-label="打开设置">⚙</button>
+        <button type="button" id="capsuleButton" class="icon-button" title="胶囊模式" aria-label="切换到胶囊模式">▯</button>
+        <button type="button" id="scanButton" class="icon-button" title="扫描邮箱" aria-label="扫描邮箱">↻</button>
+      </div>
+    </header>
+
+    <section id="capsuleView" class="capsule-view">
+      <button id="expandButton" title="点击展开">
+        <span class="capsule-mark">J</span>
+        <strong id="capsuleCount">0</strong>
+      </button>
+      <div class="capsule-drag native-drag pywebview-drag-region" title="按住拖动"></div>
+    </section>
+
+    <section class="notice-stack">
+      <button type="button" id="githubUpdateNotice" class="secondary-wide" hidden>发现新版，查看更新</button>
+      <div id="urgentStrip" class="urgent-strip hidden"></div>
+      <details id="scanResult" class="scan-result" hidden>
+        <summary id="scanResultLabel"></summary><p id="scanResultDetail"></p>
+      </details>
+      <div class="scan-progress" data-scan-progress hidden>
+        <span data-scan-label role="status" aria-live="polite"></span>
+        <progress data-scan-bar aria-label="当前扫描阶段进度"></progress>
+      </div>
+    </section>
+
+    <nav class="tabs" aria-label="任务视图" role="tablist">
+      <button class="tab active" data-view="today" role="tab" aria-selected="true" aria-controls="cards">速览 <span id="countToday">0</span><b class="unread-badge" data-unread="today" hidden>0</b></button>
+      <button class="tab" data-view="progress" role="tab" aria-selected="false" aria-controls="cards" tabindex="-1" title="按企业查看笔试、面试与轮次进展">进展 <span id="countProgress">0</span><b class="unread-badge" data-unread="progress" hidden>0</b></button>
+      <button class="tab" data-view="week" role="tab" aria-selected="false" aria-controls="cards" tabindex="-1">周历 <span id="countWeek">0</span><b class="unread-badge" data-unread="week" hidden>0</b></button>
+      <button class="tab" data-view="month" role="tab" aria-selected="false" aria-controls="cards" tabindex="-1">月历 <span id="countMonth">0</span><b class="unread-badge" data-unread="month" hidden>0</b></button>
+      <button class="tab" data-view="review" role="tab" aria-selected="false" aria-controls="cards" tabindex="-1" title="每封待归属邮件可在独立原生窗口中复核">待处理 <span id="countReview">0</span><b class="unread-badge" data-unread="review" hidden>0</b></button>
+      <button class="tab" data-view="list" role="tab" aria-selected="false" aria-controls="cards" tabindex="-1" title="全部事项；完成后保留，可再次恢复">待办 <span id="countList">0</span><b class="unread-badge" data-unread="list" hidden>0</b></button>
+    </nav>
+
+    <main id="cards" class="cards" role="tabpanel" tabindex="-1">
+    <div id="reviewTools" class="review-tools" hidden>
+      <button type="button" id="historyScanButton">补扫历史邮件…</button>
+      <button type="button" id="ignoredReviewsButton">已忽略邮件</button>
+    </div>
+    </main>
+
+    <footer>
+      <span id="healthDot" class="health-dot"></span>
+      <span id="healthText">读取本地任务中…</span>
+      <span id="refreshStatus" class="refresh-status" role="status" aria-live="polite" hidden></span>
+      <button id="ledgerButton" class="text-button" title="将本地 Markdown 台账中的手工修改导入卡片；不连接邮箱或在线笔记">导入台账修改</button>
+      <button id="refreshButton" class="text-button" title="立即扫描邮箱并刷新任务">扫描邮箱</button>
+    </footer>
+
+    <template id="taskTemplate">
+      <article class="task-card">
+        <div class="card-head">
+          <div>
+            <div class="company"></div>
+            <div class="role"></div>
+          </div>
+          <div class="time-box">
+            <div class="time-label"></div>
+            <div class="remaining"></div>
+          </div>
+        </div>
+        <div class="meta">
+          <span class="stage"></span>
+          <span class="round"></span>
+          <span class="research"></span>
+          <span class="snoozed"></span>
+        </div>
+        <p class="action"></p>
+        <div class="actions">
+          <button data-action="toggle_done">完成</button>
+          <button data-action="edit_time">补时间</button>
+          <button data-action="snooze">延后</button>
+          <button data-action="original_mail">查看原邮件</button>
+          <button data-action="source">打开通知链接</button>
+          <button data-action="research" class="research-open">查看攻略</button>
+          <button data-action="obsidian">Obsidian</button>
+          <button data-action="edit">编辑</button>
+          <button data-action="ignore" class="muted">忽略</button>
+          <button data-action="trash" class="muted">删除</button>
+        </div>
+      </article>
+    </template>
+
+    <dialog id="historyScanDialog" class="mail-tools-dialog" aria-labelledby="historyScanTitle">
+      <div class="dialog-head"><h2 id="historyScanTitle">补扫历史邮件</h2><button type="button" id="closeHistoryScan" aria-label="关闭补扫">×</button></div>
+      <p>重新检查所选范围内的邮件，补入遗漏记录、更新未确认信息。日常扫描设置不变；已确认、已忽略和手动恢复的记录保留。</p>
+      <label for="historyScanDays">回看范围</label>
+      <select id="historyScanDays"><option value="7">最近 7 天</option><option value="30" selected>最近 30 天</option><option value="90">最近 90 天</option></select>
+      <p>包含已读和未读邮件，只读取当前配置的邮箱文件夹。邮件较多时可能需要几分钟。</p>
+      <button type="button" id="startHistoryScan">开始补扫</button>
+    </dialog>
+    <dialog id="ignoredReviewsDialog" class="mail-tools-dialog" aria-labelledby="ignoredReviewsTitle">
+      <div class="dialog-head"><h2 id="ignoredReviewsTitle">已忽略邮件</h2><button type="button" id="closeIgnoredReviews" aria-label="关闭已忽略邮件">×</button></div>
+      <p>这里只显示手动忽略的待归属邮件。恢复后回到待处理，由你确认归属；不会修改邮箱中的邮件。</p>
+      <p id="ignoredReviewsStatus" role="status" aria-live="polite"></p>
+      <div id="ignoredReviewsList"></div>
+    </dialog>
+    <dialog id="quickCreateDialog" class="quick-create-dialog" aria-labelledby="quickCreateTitle">
+      <div class="quick-create">
+        <div class="dialog-head">
+          <div><div class="eyebrow">QUICK CREATE</div><h2 id="quickCreateTitle">新建</h2></div>
+          <button type="button" id="closeQuickCreate" class="dialog-close" aria-label="关闭新建菜单">×</button>
+        </div>
+        <button type="button" id="createApplicationChoice">新建申请<small>记录公司、岗位与申请进展</small></button>
+        <button type="button" id="createTaskChoice">新建待办<small>添加时间、截止与行动事项</small></button>
+      </div>
+    </dialog>
+
+    <dialog id="taskDialog" class="workflow-dialog" aria-labelledby="dialogTitle">
+      <form id="taskForm" class="workflow-form" method="dialog" novalidate>
+        <div class="dialog-head">
+          <div>
+            <div class="eyebrow">JOB TASK</div>
+            <h2 id="dialogTitle">新建待办</h2>
+          </div>
+          <button type="button" id="closeDialog" class="dialog-close" aria-label="关闭待办编辑">×</button>
+        </div>
+        <input type="hidden" name="task_id">
+        <input type="hidden" name="expected_revision">
+        <label>关联申请链
+          <select name="application_key">
+            <option value="">不关联申请链</option>
+          </select>
+        </label>
+        <div class="identity-row">
+          <label>公司 / 事项<input name="company" required maxlength="80"></label>
+          <label>岗位<input name="role" maxlength="80"></label>
+        </div>
+        <label>岗位地点<input name="location" maxlength="100"></label>
+        <div class="form-row">
+          <label>阶段<input name="stage" value="自定义待办" maxlength="40"></label>
+          <label>轮次<input name="round" maxlength="30"></label>
+        </div>
+        <div class="form-row">
+          <label>硬截止日期<input name="deadline_date" type="date"></label>
+          <div class="clock-field">
+            <span class="clock-field-title">时间</span>
+            <div class="clock-inputs">
+              <input name="deadline_hour" type="text" inputmode="numeric"
+                     maxlength="2" placeholder="14" autocomplete="off"
+                     aria-label="小时">
+              <span class="clock-separator" aria-hidden="true">:</span>
+              <input name="deadline_minute" type="text" inputmode="numeric"
+                     maxlength="2" placeholder="00" autocomplete="off"
+                     aria-label="分钟">
+            </div>
+          </div>
+        </div>
+        <p class="field-hint">笔试或面试的开始时刻即为硬截止：在此之前需要处理这件事。</p>
+        <label>下一步行动<textarea name="action_summary" rows="3" maxlength="240" placeholder="留空时使用“处理这项求职待办”"></textarea></label>
+        <label>Markdown 手动补充<textarea name="manual_notes" rows="6" maxlength="2000" placeholder="准备材料、问题清单、复盘备注……"></textarea></label>
+        <div id="formError" class="form-error" role="alert" aria-live="assertive"></div>
+        <div class="dialog-actions">
+          <button type="button" id="deleteTask" class="danger-action" hidden>移入回收站</button>
+          <button type="button" id="cancelDialog">取消</button>
+          <button type="submit" class="primary">保存待办</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="originalMailDialog" class="original-mail-dialog" aria-labelledby="originalMailSubject">
+      <section class="original-mail-panel">
+        <div class="dialog-head">
+          <div>
+            <div class="eyebrow">READ-ONLY IMAP</div>
+            <h2 id="originalMailSubject">原邮件</h2>
+          </div>
+          <button type="button" id="closeOriginalMail" class="dialog-close" aria-label="关闭原邮件">×</button>
+        </div>
+        <div id="originalMailMeta" class="original-mail-meta"></div>
+        <div id="originalMailStatus" class="form-error" role="status" aria-live="polite"></div>
+        <div id="originalMailBody" class="original-mail-body"></div>
+        <pre id="originalMailText" class="original-mail-text"></pre>
+        <div class="dialog-actions">
+          <button type="button" id="loadRemoteImages">显式加载 HTTPS 图片</button>
+          <button type="button" id="dismissOriginalMail" class="primary">关闭</button>
+        </div>
+      </section>
+    </dialog>
+
+    <dialog id="ownershipDialog" class="workflow-dialog" aria-labelledby="ownershipTitle">
+      <form id="ownershipForm" class="workflow-form" method="dialog">
+        <div class="dialog-head">
+          <div>
+            <div class="eyebrow">REVIEW MAIL</div>
+            <h2 id="ownershipTitle">确认邮件归属</h2>
+          </div>
+          <button type="button" id="closeOwnership" class="dialog-close" aria-label="关闭邮件归属">×</button>
+        </div>
+        <input type="hidden" name="source_hash">
+        <input type="hidden" name="request_id">
+        <input type="hidden" name="expected_review_revision">
+        <input type="hidden" name="expected_application_revision">
+        <div id="ownershipRecommendation" class="workflow-recommendation"></div>
+        <div class="workflow-grid ownership-target-grid">
+          <label>处理方式
+            <select name="mode">
+              <option value="new">创建新申请链并归属</option>
+              <option value="existing">更新已有申请链</option>
+              <option value="update_task">更新已有申请链上的待办（改期 / 改场地）</option>
+            </select>
+          </label>
+          <label id="ownershipExistingRow">已有申请
+            <select name="application_key"></select>
+          </label>
+        </div>
+        <label id="ownershipTaskRow" hidden>要更新的待办
+          <select name="task_id"></select>
+          <input type="hidden" name="expected_task_revision">
+        </label>
+        <div class="workflow-grid">
+          <label>公司<input name="company" list="applicationCompanyChoices" required maxlength="80" autocomplete="off"></label>
+          <label>岗位<input name="role" list="applicationRoleChoices" maxlength="100" autocomplete="off"></label>
+        </div>
+        <label>岗位地点<input name="location" maxlength="100"></label>
+        <label>招聘项目<input name="recruiting_project" maxlength="100"></label>
+        <div class="workflow-grid progress-fields">
+          <label>当前进度
+            <select name="stage" data-stage-select>
+              <option value="网申">网申</option>
+              <option value="简历筛选">简历筛选</option>
+              <option value="测评">测评</option>
+              <option value="笔试">笔试</option>
+              <option value="一面">一面</option>
+              <option value="二面">二面</option>
+              <option value="三面">三面</option>
+              <option value="HR 面">HR 面</option>
+              <option value="Offer">Offer 阶段</option>
+              <option value="已拒绝">已拒绝</option>
+              <option value="已结束">已结束</option>
+            </select>
+          </label>
+          <label>状态
+            <select name="manual_stage_status">
+              <option value="pending">未完成</option>
+              <option value="completed">已完成</option>
+            </select>
+          </label>
+        </div>
+        <label>下一步进度
+          <select name="next_stage" data-stage-select>
+            <option value="">等待通知 / 暂未确定</option>
+            <option value="网申">网申</option>
+            <option value="简历筛选">简历筛选</option>
+            <option value="测评">测评</option>
+            <option value="笔试">笔试</option>
+            <option value="一面">一面</option>
+            <option value="二面">二面</option>
+            <option value="三面">三面</option>
+            <option value="HR 面">HR 面</option>
+            <option value="Offer">Offer 阶段</option>
+            <option value="已拒绝">已拒绝</option>
+            <option value="已结束">已结束</option>
+          </select>
+        </label>
+        <label class="workflow-check" id="ownershipCreateTaskRow">
+          <input name="create_task" type="checkbox" value="1">
+          <span>同时创建待办，并加入日历与通知提醒</span>
+        </label>
+        <details id="ownershipTaskDetails" class="workflow-details">
+          <summary>待办时间与行动内容</summary>
+          <div class="workflow-grid">
+            <label>硬截止日期<input name="deadline_date" type="date"></label>
+            <div class="clock-field">
+              <span class="clock-field-title">时间</span>
+              <div class="clock-inputs">
+                <input name="deadline_hour" type="text" inputmode="numeric"
+                       maxlength="2" placeholder="14" autocomplete="off"
+                       aria-label="小时">
+                <span class="clock-separator" aria-hidden="true">:</span>
+                <input name="deadline_minute" type="text" inputmode="numeric"
+                       maxlength="2" placeholder="00" autocomplete="off"
+                       aria-label="分钟">
+              </div>
+            </div>
+          </div>
+          <div class="workflow-grid">
+            <label>预计时长（分钟）<input name="duration_minutes" type="number" min="1" max="1440" readonly></label>
+            <label>行动链接<input name="source_url" type="url" readonly></label>
+          </div>
+          <label>待办内容<textarea name="action_summary" rows="3" maxlength="240"></textarea></label>
+          <label>备注<textarea name="task_notes" rows="3" maxlength="2000" placeholder="准备材料、问题清单、复盘备注……"></textarea></label>
+        </details>
+        <div id="ownershipError" class="form-error" role="alert" aria-live="assertive"></div>
+        <div class="dialog-actions">
+          <button type="button" id="cancelOwnership">取消</button>
+          <button type="submit" class="primary">确认并保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="applicationDialog" class="workflow-dialog" aria-labelledby="applicationDialogTitle">
+      <form id="applicationForm" class="workflow-form" method="dialog">
+        <div class="dialog-head">
+          <div>
+            <div class="eyebrow">APPLICATION</div>
+            <h2 id="applicationDialogTitle">申请详情</h2>
+          </div>
+          <button type="button" id="closeApplication" class="dialog-close" aria-label="关闭申请编辑">×</button>
+        </div>
+        <input type="hidden" name="application_key">
+        <input type="hidden" name="expected_revision">
+        <div class="workflow-grid">
+          <label>公司<input name="company" list="applicationCompanyChoices" required maxlength="80" autocomplete="off"></label>
+          <label>岗位<input name="role" list="applicationRoleChoices" maxlength="100" autocomplete="off"></label>
+        </div>
+        <label>岗位地点<input name="location" maxlength="100" placeholder="例如：上海 / 深圳"></label>
+        <label>招聘项目<input name="recruiting_project" maxlength="100"></label>
+        <div class="workflow-grid">
+          <label>职位编号<input name="job_code" maxlength="40"></label>
+          <label>申请生命周期
+            <select name="status">
+              <option value="active">进行中</option>
+              <option value="ended">已结束</option>
+              <option value="archived">已归档</option>
+            </select>
+          </label>
+        </div>
+        <div class="workflow-grid progress-fields">
+          <label>当前进度
+            <select name="manual_stage" data-stage-select>
+              <option value="网申">网申</option>
+              <option value="简历筛选">简历筛选</option>
+              <option value="测评">测评</option>
+              <option value="笔试">笔试</option>
+              <option value="一面">一面</option>
+              <option value="二面">二面</option>
+              <option value="三面">三面</option>
+              <option value="HR 面">HR 面</option>
+              <option value="Offer">Offer 阶段</option>
+              <option value="已拒绝">已拒绝</option>
+              <option value="已结束">已结束</option>
+            </select>
+          </label>
+          <label>状态
+            <select name="manual_stage_status">
+              <option value="pending">未完成</option>
+              <option value="completed">已完成</option>
+            </select>
+          </label>
+        </div>
+        <label>下一步进度
+          <select name="next_stage" data-stage-select>
+            <option value="">等待通知 / 暂未确定</option>
+            <option value="网申">网申</option>
+            <option value="简历筛选">简历筛选</option>
+            <option value="测评">测评</option>
+            <option value="笔试">笔试</option>
+            <option value="一面">一面</option>
+            <option value="二面">二面</option>
+            <option value="三面">三面</option>
+            <option value="HR 面">HR 面</option>
+            <option value="Offer">Offer 阶段</option>
+            <option value="已拒绝">已拒绝</option>
+            <option value="已结束">已结束</option>
+          </select>
+        </label>
+        <label>备注<textarea name="manual_notes" rows="4" maxlength="2000"></textarea></label>
+        <div id="applicationTimeline" class="application-timeline"></div>
+        <div id="applicationError" class="form-error" role="alert" aria-live="assertive"></div>
+        <div class="dialog-actions">
+          <button type="button" id="cancelApplication">取消</button>
+          <button type="submit" id="applicationSubmit" class="primary">保存申请</button>
+        </div>
+      </form>
+    </dialog>
+
+    <datalist id="applicationCompanyChoices"></datalist>
+    <datalist id="applicationRoleChoices"></datalist>
+
+    <dialog id="applicationActionDialog" class="workflow-dialog" aria-labelledby="applicationActionTitle">
+      <form id="applicationActionForm" class="workflow-form" method="dialog">
+        <div class="dialog-head">
+          <div><div class="eyebrow">APPLICATION CHAIN</div><h2 id="applicationActionTitle">申请链操作</h2></div>
+          <button type="button" id="closeApplicationAction" class="dialog-close" aria-label="关闭申请链操作">×</button>
+        </div>
+        <input type="hidden" name="source">
+        <input type="hidden" name="action">
+        <label id="mergeTargetRow">查找目标申请链
+          <input name="target_query" type="search" placeholder="输入公司、岗位、地点或阶段" autocomplete="off">
+          <select name="target"></select>
+        </label>
+        <label id="crossCompanyConfirmRow" class="workflow-check" hidden>
+          <input name="cross_company_confirmed" type="checkbox">
+          <span>我确认将来源申请合并到另一家公司；公司身份将以冲突选择为准</span>
+        </label>
+        <div id="applicationActionPreview" class="action-preview"></div>
+        <div id="mergeConflictFields" class="merge-conflict-fields" hidden></div>
+        <div id="applicationActionError" class="form-error" role="alert" aria-live="assertive"></div>
+        <div class="dialog-actions">
+          <button type="button" id="cancelApplicationAction">取消</button>
+          <button type="submit" id="applicationActionSubmit" class="danger-action">继续</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="settingsDialog" class="settings-dialog" aria-labelledby="settingsTitle">
+      <form id="settingsForm" method="dialog">
+        <div class="dialog-head">
+          <div>
+            <div class="eyebrow">JOBMAILDESK CORE</div>
+            <h2 id="settingsTitle">设置</h2>
+          </div>
+          <button type="button" id="closeSettings" class="dialog-close" aria-label="关闭设置">×</button>
+        </div>
+        <p id="firstRunHint" class="settings-hint hidden">首次使用请配置邮箱账号。客户端授权码只保存在系统安全凭据库，本程序不会把密码写入配置文件。</p>
+
+        <section class="settings-section">
+          <h3>数据存放位置</h3>
+          <p id="storageLocationPath"></p>
+          <p>待办、求职进展、配置、缓存和日志统一存放在这里。选择一个位置后，程序自动创建专用文件夹，无需逐项修改路径。</p>
+          <button type="button" id="chooseStorageLocation" class="secondary-wide">更换数据位置…</button>
+          <p id="storageLocationHint"></p>
+        </section>
+
+        <section class="settings-section">
+          <h3>邮箱与扫描</h3>
+          <label>邮箱账号<input name="email" type="email" autocomplete="username" placeholder="请输入完整邮箱地址"></label>
+          <label>客户端授权码<input name="authorization_code" type="password" autocomplete="new-password" placeholder="已配置时留空即可"></label>
+          <label>邮件服务商
+            <select name="mail_provider" id="mailProvider">
+              <option value="qq">QQ</option>
+              <option value="163">163</option>
+              <option value="126">126</option>
+              <option value="yeah">Yeah</option>
+              <option value="gmail">Gmail</option>
+              <option value="outlook">Outlook</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <div class="form-row">
+            <label>IMAP主机<input name="mail_host" autocomplete="off" placeholder="imap.example.com"></label>
+            <label>端口<input name="mail_port" type="number" min="1" max="65535" inputmode="numeric"></label>
+          </div>
+          <label class="toggle-label"><input name="mail_ssl" type="checkbox">使用 SSL/TLS</label>
+          <div class="form-row">
+            <label>扫描间隔（分钟）<input name="poll_minutes" type="number" min="5" max="120" value="10"></label>
+            <label>日常回看天数<input name="lookback_days" type="number" min="1" max="30" value="3"></label>
+          </div>
+          <p>首次扫描最近 30 天，包含已读和未读邮件；之后按日常回看天数定时扫描并去重。程序退出后停止扫描，关闭窗口留在托盘时继续运行。</p>
+          <label class="toggle-label"><input name="include_onsite_sessions" type="checkbox">保留有明确时间和线下地点的宣讲会</label>
+          <p>默认过滤宣传邮件。开启后，符合条件的线下宣讲会先进入待处理，由你决定是否加入日历；线上宣讲、岗位推荐和邀投简历仍过滤。真实投递回执、个人笔试／面试及进度通知始终保留。</p>
+          <p>保存此选项后，下次扫描会复查最近 30 天。自动过滤的记录可以重新出现；手动忽略和已确认的记录保持不变。</p>
+          <div class="scan-progress" data-scan-progress hidden>
+        <span data-scan-label role="status" aria-live="polite"></span>
+        <progress data-scan-bar aria-label="当前扫描阶段进度"></progress>
+      </div>
+          <p id="scanDetails" aria-live="polite">尚无扫描记录</p>
+          <button type="button" id="testMailSettings" class="secondary-wide">测试只读邮箱连接</button>
+          <button type="button" id="settingsHistoryScanButton" class="secondary-wide">补扫历史邮件…</button>
+        </section>
+
+        <section class="settings-section">
+          <label class="toggle-label"><input name="obsidian_enabled" type="checkbox">同步到Obsidian</label>
+          <p>可选。本程序可独立使用；关闭时待办仍保存在所选数据目录。当前支持本地 Markdown／Obsidian，尚未接入 Notion 或语雀自动同步。</p>
+          <details class="path-options">
+            <summary>高级：选择外部 Obsidian 文件</summary>
+          <div class="path-row">
+            <input name="obsidian_output" aria-label="Obsidian待办路径">
+            <button type="button" data-pick-path="obsidian_output">选择</button>
+          </div>
+          </details>
+        </section>
+
+        <section class="settings-section">
+          <label class="toggle-label"><input name="progress_enabled" type="checkbox">生成求职进展文档</label>
+          <p>默认保存到所选数据目录，无需修改路径。输出文档由程序维护；需要外部文件或手动台账时再展开高级设置。</p>
+          <details class="path-options">
+            <summary>高级：自定义导出文件与手动台账</summary>
+          <label>进展输出</label>
+          <div class="path-row">
+            <input name="progress_output" aria-label="进展输出路径">
+            <button type="button" data-pick-path="progress_output">选择</button>
+          </div>
+          <label>手动进展台账（本地 Markdown）</label>
+          <p>在这个文件里修改投递进展后，点击主界面的“导入台账修改”。此功能不连接邮箱，也不对接 Notion 或语雀。</p>
+          <div class="path-row">
+            <input name="progress_source" aria-label="手动进展台账路径">
+            <button type="button" data-pick-path="progress_source">选择</button>
+          </div>
+          <button type="button" id="createProgressTemplate" class="secondary-wide">生成规范台账模板</button>
+          </details>
+        </section>
+
+        <section class="settings-section dictionary-section">
+          <div class="settings-section-head">
+            <h3>企业与岗位词典</h3>
+            <span id="dictionaryBadge" class="version-chip">正在读取</span>
+          </div>
+          <p>程序已内置通用秋招词典。也可以导入自己的 XLSX 表格，在本机追加企业、招聘项目和岗位名称。</p>
+          <label>工作表名称<input name="dictionary_sheet" value="2027秋招信息表" placeholder="例如：2027秋招信息表"></label>
+          <div class="path-row">
+            <input name="dictionary_workbook" aria-label="秋招词典工作簿" readonly placeholder="选择 .xlsx 文件">
+            <button type="button" id="selectDictionaryWorkbook">选择</button>
+          </div>
+          <button type="button" id="compileDictionaryWorkbook" class="secondary-wide">编译并启用个人词典</button>
+          <div id="dictionaryStatus" class="update-status">内置词典可直接使用</div>
+          <h4>本机纠错学习</h4>
+          <p>人工修正待归属邮件后，仅对相同发件签名与标题模板生效；不保存邮件正文或完整邮箱。</p>
+          <button type="button" id="rebuildIdentityLearning" class="secondary-wide">从最近 30 天已确认申请重建</button>
+          <div id="identityLearningRules" class="identity-learning-rules">暂无已学习规则</div>
+        </section>
+
+        <section class="settings-section">
+          <h3>提醒与系统日历</h3>
+          <label class="toggle-label"><input name="reminders_enabled" type="checkbox">启用应用提醒</label>
+          <label class="toggle-label"><input name="notify_new_mail" type="checkbox">扫描到新的待确认邮件时弹出系统通知（点击通知直接打开「待处理」）</label>
+          <label>提前提醒（分钟，逗号分隔）
+            <input name="reminder_offsets_minutes" placeholder="1440, 120, 30">
+          </label>
+          <label class="toggle-label"><input name="calendar_sync_enabled" type="checkbox">同步到系统日历</label>
+          <label>日历名称<input name="calendar_name" value="JobMailDesk" maxlength="80"></label>
+          <p id="calendarBackendHint" class="hidden"></p>
+          <button type="button" id="syncCalendarNow" class="secondary-wide">立即同步 / 重新授权</button>
+          <button type="button" id="openCalendarExportFolder" class="secondary-wide hidden">打开日历文件所在文件夹</button>
+          <div id="calendarStatus" class="update-status">尚未同步</div>
+        </section>
+
+        <section class="settings-section">
+          <h3>界面显示</h3>
+          <label>字体大小 <output id="fontScaleValue">108%</output>
+            <input name="ui_font_scale" type="range" min="90" max="125" step="1" value="108">
+          </label>
+          <p>可在 90%–125% 间调整。长公司、岗位和地点仍会单行省略，避免破坏卡片布局。</p>
+          <label class="toggle-label" id="taskbarButtonRow"><input name="taskbar_button" type="checkbox">在任务栏显示窗口按钮（可最小化 / 最大化；重启后生效）</label>
+          <p id="closeHidesHint" class="hidden">点窗口右上角「×」只会把窗口隐藏到托盘，程序继续在后台扫描和提醒；彻底退出请用托盘菜单「退出」。</p>
+        </section>
+
+        <section id="githubUpdateSection" class="settings-section hidden">
+          <h3>程序更新</h3>
+          <p id="githubCurrentVersion" class="settings-hint"></p>
+          <p>从 WizLiang/jobmaildesk 的 GitHub 发布获取 Windows 更新。检查不发送邮箱或求职数据。</p>
+          <label class="toggle-label"><input name="github_updates_enabled" type="checkbox">每天检查一次新版（仅提示）</label>
+          <label>更新通道<select name="update_channel"><option value="preview">试用版与正式版</option><option value="stable">仅正式版</option></select></label>
+          <p id="githubUpdateStatus" role="status" aria-live="polite">尚未检查更新</p>
+          <progress id="githubUpdateProgress" hidden></progress>
+          <details id="githubUpdateNotesPanel" hidden><summary>新版说明</summary><pre id="githubUpdateNotes"></pre></details>
+          <div class="github-update-actions">
+            <button type="button" id="checkGithubUpdate">检查更新</button>
+            <button type="button" id="downloadGithubUpdate" hidden>下载新版</button>
+            <button type="button" id="installGithubUpdate" hidden>重启并更新…</button>
+            <button type="button" id="openGithubReleases">打开发布页</button>
+          </div>
+          <p>更新保留数据位置与邮箱凭据。无法自动替换时，可从发布页下载并手动解压。</p>
+        </section>
+
+        <section id="privacyResetSection" class="settings-section hidden">
+          <h3>个人信息</h3>
+          <p>永久清除本机邮箱账号与授权码、私人链接密钥、求职记录、简报、学习规则、配置、缓存和日志。清除后自动重新打开程序，需要重新配置邮箱。</p>
+          <p>邮箱里的邮件不会改变。外部 Obsidian 文档、已导入系统日历的事件及手动备份需要另行清理。</p>
+          <button type="button" id="openPrivacyReset" class="secondary-wide">清除个人信息…</button>
+        </section>
+        <div id="settingsStatus" class="form-error" role="alert" aria-live="assertive"></div>
+        <div class="dialog-actions">
+          <button type="button" id="cancelSettings">取消</button>
+          <button type="submit" class="primary">保存并应用</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="githubUpdateDialog" class="mail-tools-dialog" aria-labelledby="githubUpdateTitle">
+      <h2 id="githubUpdateTitle">重启并更新程序？</h2>
+      <p>程序将退出，替换程序文件并重新打开。邮箱凭据和所选数据目录保持不变；旧程序目录会保留在旁边供回退。</p>
+      <p>请先保存正在编辑的内容。若替换失败，将尝试恢复旧程序。</p>
+      <p id="githubInstallStatus" role="alert"></p>
+      <div class="dialog-actions"><button type="button" id="cancelGithubInstall">取消</button><button type="button" id="confirmGithubInstall" class="primary">确认重启更新</button></div>
+    </dialog>
+
+    <dialog id="storageMoveDialog" class="settings-dialog" aria-labelledby="storageMoveTitle">
+      <form id="storageMoveForm">
+        <h2 id="storageMoveTitle">迁移到新的数据位置</h2>
+        <p id="storageMoveTarget"></p>
+        <p>程序将退出，把现有数据复制并校验到新位置，再移除原目录中的旧副本并重新打开。内部文件路径自动更新。</p>
+        <p>外部 Obsidian 文件和手动备份保留原位置；邮箱授权码继续由 Windows 凭据管理器保管。不会重新扫描邮箱或重建任务。</p>
+        <p id="storageMoveStatus" role="alert" aria-live="assertive"></p>
+        <div class="dialog-actions">
+          <button type="button" id="cancelStorageMove">取消</button>
+          <button type="submit" id="confirmStorageMove" class="primary">迁移并重新打开</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="privacyResetDialog" class="settings-dialog" aria-labelledby="privacyResetTitle">
+      <form id="privacyResetForm">
+        <h2 id="privacyResetTitle">永久清除个人信息</h2>
+        <p>此操作不可撤销，也不会生成备份。将退出当前程序并清除本机应用数据及系统凭据，再以初始状态打开。</p>
+        <p id="privacyResetDirectory"></p>
+        <p>应用目录外的导出文档、手动备份和已导入日历的事件不在清除范围内。</p>
+        <label>请输入“清除”以确认
+          <input id="privacyResetConfirmation" type="text" autocomplete="off" required>
+        </label>
+        <p id="privacyResetStatus" role="alert" aria-live="assertive"></p>
+        <div class="dialog-actions">
+          <button type="button" id="cancelPrivacyReset">取消</button>
+          <button type="submit" id="confirmPrivacyReset" class="primary" disabled>永久清除并重新打开</button>
+        </div>
+      </form>
+    </dialog>
+    <script src="app.js"></script>
+  </body>
+</html>

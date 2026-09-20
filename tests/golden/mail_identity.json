@@ -1,0 +1,346 @@
+[
+  {
+    "name": "smartsens-moka-application-receipt",
+    "subject": "您已应聘思特威电子科技，快来Get最新招聘信息查询方式~",
+    "sender": "思特威电子科技 <smartsenstech1-no-reply@mail.mokahr.com>",
+    "body": "我们已收到您对 数字后端工程师【27届校招】 的申请，并会尽快查看您的简历。",
+    "company": "思特威电子科技",
+    "role": "数字后端工程师"
+  },
+  {
+    "name": "reviewed-subject-bracket-beats-technical-sender",
+    "subject": "【网易游戏互娱校招】简历投递成功提醒",
+    "sender": "NetEase_HR <hr@example.invalid>",
+    "body": "您投递的 AI策略运营 职位，简历已成功提交。",
+    "company": "网易游戏",
+    "role": "AI策略运营"
+  },
+  {
+    "name": "explicit-role-label-cleans-cohort",
+    "subject": "【样例科技】申请确认",
+    "sender": "招聘团队 <noreply@example.invalid>",
+    "body": "应聘岗位：芯片验证工程师【27届校招】",
+    "company": "样例科技",
+    "role": "芯片验证工程师"
+  },
+  {
+    "name": "smartsens-written-exam-window",
+    "subject": "【思特威电子科技】邀请您参与在线笔试",
+    "sender": "思特威电子科技 <smartsenstech1-no-reply@mail.mokahr.com>",
+    "body": "思特威电子科技邀请您参加数字后端工程师【27届校招】在线笔试。考试链接：https://www.showmebug.com/written_pads/XMGLSA 考试开始时间：2026-08-14 00:00:00 考试结束时间：2026-08-17 23:55:00 考试时长：90min",
+    "company": "思特威电子科技",
+    "role": "数字后端工程师",
+    "stage": "在线笔试",
+    "start_at": "2026-08-14T00:00:00+08:00",
+    "end_at": null,
+    "deadline_at": "2026-08-17T23:55:00+08:00",
+    "duration_minutes": 90,
+    "source_url": "https://www.showmebug.com/written_pads/XMGLSA"
+  },
+  {
+    "name": "longsys-successful-application",
+    "subject": "【江波龙】2027届校园招聘职位投递进展",
+    "sender": "校园招聘系统 <noreply@example.invalid>",
+    "body": "您已成功申请【 IC实现工程师（上海）(J11374) 】职位，目前招聘团队正在认真审阅每一份简历，确保不错过任何一位有潜力的候选人。",
+    "company": "江波龙",
+    "role": "IC实现工程师",
+    "role_raw": "IC实现工程师（上海）(J11374)",
+    "location": "上海",
+    "job_code": "J11374",
+    "stage": "网申"
+  },
+  {
+    "name": "asr-digital-backend-application",
+    "subject": "张三，感谢你投递翱捷科技股份有限公司公司的数字后端工程师职位",
+    "sender": "翱捷科技招聘 <noreply@example.invalid>",
+    "body": "请登录系统查看详情。",
+    "company": "翱捷科技股份有限公司",
+    "role": "数字后端工程师",
+    "stage": "网申"
+  },
+  {
+    "name": "asr-digital-mid-end-application",
+    "subject": "张三，感谢你投递翱捷科技股份有限公司公司的数字中端实现工程师职位",
+    "sender": "翱捷科技招聘 <noreply@example.invalid>",
+    "body": "请登录系统查看详情。",
+    "company": "翱捷科技股份有限公司",
+    "role": "数字中端实现工程师",
+    "stage": "网申"
+  },
+  {
+    "name": "li-auto-recruiting-suffix-and-structured-role",
+    "subject": "【理想汽车招聘】职位申请成功通知",
+    "sender": "招聘团队 <noreply@example.invalid>",
+    "body": "您已成功申请【芯片中后端设计工程师】职位，招聘团队将尽快审阅您的简历。",
+    "company": "理想汽车",
+    "role": "芯片中后端设计工程师",
+    "role_raw": "芯片中后端设计工程师",
+    "location": null,
+    "job_code": null,
+    "stage": "网申"
+  },
+  {
+    "name": "li-auto-actual-application-body",
+    "subject": "理想汽车邀请您投递简历",
+    "sender": "理想汽车招聘 <noreply@example.invalid>",
+    "body": "你申请的【芯片中后端设计工程师】岗位已经投递成功，我们将尽快对你的简历进行评估。",
+    "company": "理想汽车",
+    "role": "芯片中后端设计工程师",
+    "stage": "网申"
+  },
+  {
+    "name": "bytedance-actual-application-body",
+    "subject": "感谢投递字节跳动！",
+    "sender": "ByteDance <noreply@example.invalid>",
+    "body": "你在芯片物理实现与系统集成工程师 - 芯片研发上的投递我们已收到，请保持联系方式畅通。",
+    "company": "字节跳动",
+    "role": "芯片物理实现与系统集成工程师",
+    "stage": "网申"
+  },
+  {
+    "name": "zte-microelectronics-job-code-prefix",
+    "subject": "中兴微电子简历投递成功提醒",
+    "sender": "中兴微招聘 <noreply@example.invalid>",
+    "body": "感谢您投递中兴微电子校园招聘JW27021-IC后端设计工程师岗位，接下来我们将对您的简历进行全面评估。",
+    "company": "中兴微电子",
+    "role": "IC后端设计工程师",
+    "job_code": "JW27021",
+    "stage": "网申"
+  },
+  {
+    "name": "xindong-base-location-application",
+    "subject": "【芯动科技校园招聘】感谢您投递2027届校园招聘职位",
+    "sender": "芯动科技招聘 <noreply@example.invalid>",
+    "body": "您已成功投递【数字IC后端工程师（base武汉-27届校招）(J12716)】职位。",
+    "company": "芯动科技",
+    "role": "数字IC后端工程师",
+    "location": "武汉",
+    "job_code": "J12716",
+    "stage": "网申"
+  },
+  {
+    "name": "xindong-resume-screening-role",
+    "subject": "芯动科技27届校招数字IC后端工程师简历评估通过",
+    "sender": "芯动科技招聘 <noreply@example.invalid>",
+    "body": "恭喜您顺利通过芯动科技2027届校园招聘的简历评估环节，具体笔试邀请将另行通知。",
+    "company": "芯动科技",
+    "role": "数字IC后端工程师",
+    "stage": "简历筛选"
+  },
+  {
+    "name": "xpeng-role-after-cohort",
+    "subject": "小鹏集团-【27届校招】综合实现工程师-AI测评邀请",
+    "sender": "小鹏汽车 <noreply@example.invalid>",
+    "body": "我们诚挚地邀请您参加【27届校招】综合实现工程师的AI测评面试。",
+    "company": "小鹏汽车",
+    "role": "综合实现工程师",
+    "stage": "人才测评"
+  },
+  {
+    "name": "dji-role-before-assessment-invitation",
+    "subject": "来自DJI 大疆的测评邀请",
+    "sender": "DJI 大疆 <noreply@example.invalid>",
+    "body": "感谢参加DJI 大疆2027校园招聘并投递芯片物理实现工程师（上海），现诚邀您参与在线测评！",
+    "company": "DJI 大疆",
+    "role": "芯片物理实现工程师",
+    "location": "上海",
+    "stage": "人才测评"
+  },
+  {
+    "name": "muxi-exam-role-and-location",
+    "subject": "来自沐曦股份的考试邀请",
+    "sender": "沐曦股份 <noreply@example.invalid>",
+    "body": "感谢您投递 沐曦股份 的 GPU后端设计工程师-南京 ，很荣幸的通知您，您的简历已经通过了筛选，您有资格进入我们的人才考试阶段。",
+    "company": "沐曦股份",
+    "role": "GPU后端设计工程师",
+    "location": "南京",
+    "stage": "在线笔试"
+  },
+  {
+    "name": "hygon-written-exam-existing-company-alias",
+    "subject": "海光信息-2027届校园招聘笔试通知",
+    "sender": "海光信息招聘 <hygon-no-reply@mail.mokahr.com>",
+    "body": "感谢您对我司的关注，您的简历投递成功，现邀请您参加海光信息2027届校园招聘在线笔试。应聘岗位：2027校招-物理设计与实现工程师。请于收到邮件七日内作答。",
+    "received_at": "2026-08-18T00:35:41+08:00",
+    "company": "海光信息",
+    "role": "物理设计与实现工程师",
+    "recruiting_project": "2027校园招聘",
+    "stage": "在线笔试",
+    "event_type": "assessment",
+    "deadline_at": "2026-08-25T00:35:41+08:00"
+  },
+  {
+    "name": "legal-employer-and-role-in-exam-subject",
+    "subject": "请参加甲辰微电子（深圳）股份有限公司的数字IC设计工程师（超高速方向）在线考试",
+    "body": "您的笔试时间：9月22日14:00。",
+    "company": "甲辰微电子（深圳）股份有限公司",
+    "role": "数字IC设计工程师（超高速方向）",
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "parenthesized-employer-and-quoted-screening-role",
+    "subject": "甲辰微电子（深圳）股份有限公司-线上笔试通知",
+    "body": "简历已通过我司“数字设计工程师-深圳岗”筛选，线上笔试安排在9月22日14:00。",
+    "company": "甲辰微电子（深圳）股份有限公司",
+    "role": "数字设计工程师",
+    "location": "深圳",
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "ascii-quoted-role-and-city",
+    "subject": "甲辰微电子（深圳）股份有限公司—笔试通知",
+    "body": "您的简历已通过我司\"软件工程师-南京岗位\"筛选。笔试时间：9月22日14:00。",
+    "company": "甲辰微电子（深圳）股份有限公司",
+    "role": "软件工程师",
+    "location": "南京",
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "legal-employer-campus-ai-suffix",
+    "subject": "甲辰微电子（深圳）股份有限公司2027届校园招聘的AI面试邀请",
+    "body": "应聘岗位：数字设计工程师。您的面试时间：9月22日14:00。",
+    "company": "甲辰微电子（深圳）股份有限公司",
+    "role": "数字设计工程师",
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "campus-ai-stage-is-not-a-role",
+    "subject": "甲辰微电子（深圳）股份有限公司2027届校园招聘的AI面试邀请",
+    "body": "您的面试时间：9月22日14:00。",
+    "company": "甲辰微电子（深圳）股份有限公司",
+    "role": null,
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "legal-sender-recruitment-suffix",
+    "subject": "在线笔试通知",
+    "sender": "甲辰微电子（深圳）股份有限公司招聘 <noreply@example.invalid>",
+    "body": "岗位名称：验证工程师。您的笔试时间：9月22日14:00。",
+    "company": "甲辰微电子（深圳）股份有限公司",
+    "role": "验证工程师",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "explicit-hiring-unit-label",
+    "subject": "在线笔试通知",
+    "body": "招聘单位：甲辰微电子（深圳）股份有限公司\n应聘岗位：验证工程师。您的笔试时间：9月22日14:00。",
+    "company": "甲辰微电子（深圳）股份有限公司",
+    "role": "验证工程师",
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "quoted-role-does-not-invent-employer",
+    "subject": "在线笔试通知",
+    "body": "简历已通过我司“数字设计工程师-深圳岗”筛选。您的笔试时间：9月22日14:00。",
+    "company": null,
+    "role": "数字设计工程师",
+    "location": "深圳",
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "screening-adjective-is-not-role",
+    "subject": "在线笔试通知",
+    "body": "您的简历已通过我司“严格”筛选。您的笔试时间：9月22日14:00。",
+    "company": null,
+    "role": null,
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "conflicting-quoted-roles-stay-unknown",
+    "subject": "在线笔试通知",
+    "body": "简历已通过我司“数字设计工程师”筛选。简历已通过我司“模拟设计工程师”筛选。您的笔试时间：9月22日14:00。",
+    "company": null,
+    "role": null,
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "conflicting-employers-stay-unknown",
+    "subject": "【甲辰科技】【乙辰科技】面试通知",
+    "body": "您的面试时间：9月22日14:00。",
+    "company": null,
+    "role": null,
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "generic-online-exam-is-not-employer",
+    "subject": "线上笔试通知",
+    "body": "您的笔试时间：9月22日14:00。",
+    "company": null,
+    "role": null,
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "assessment-platform-is-not-employer",
+    "subject": "在线笔试通知",
+    "sender": "智联招聘 <noreply@example.invalid>",
+    "body": "您的笔试时间：9月22日14:00。",
+    "company": null,
+    "role": null,
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "title-role-keeps-specialization",
+    "subject": "请您参加甲辰电子有限责任公司的模拟设计工程师（电源方向）在线笔试通知",
+    "body": "您的笔试时间：9月22日14:00。",
+    "company": "甲辰电子有限责任公司",
+    "role": "模拟设计工程师(电源方向)",
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "joint-company-label-is-not-single-employer",
+    "subject": "请参加甲辰有限公司与乙辰有限公司的软件工程师在线考试",
+    "body": "您的笔试时间：9月22日14:00。",
+    "company": null,
+    "role": "软件工程师",
+    "sender": "services <noreply@example.invalid>",
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "unreviewed-short-sender-not-stripped-arbitrarily",
+    "subject": "在线笔试通知",
+    "sender": "甲辰招聘 <noreply@example.invalid>",
+    "body": "您的笔试时间：9月22日14:00。",
+    "company": "甲辰招聘",
+    "role": null,
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "system-sender-is-not-employer",
+    "subject": "在线笔试通知",
+    "sender": "系统 <noreply@example.invalid>",
+    "body": "您的笔试时间：9月22日14:00。",
+    "company": null,
+    "role": null,
+    "note": "虚构样例：验证显式身份提取或歧义保护，不含私人邮箱及链接。"
+  },
+  {
+    "name": "quoted-role-conflicts-with-explicit-role-label",
+    "subject": "在线笔试通知",
+    "sender": "services <noreply@example.invalid>",
+    "body": "应聘岗位：模拟设计工程师。简历已通过我司“数字设计工程师”筛选。笔试时间：9月22日14:00。",
+    "company": null,
+    "role": null,
+    "note": "两个明确岗位冲突，不能让新引号规则盖过岗位标签。"
+  },
+  {
+    "name": "from-prefix-is-not-part-of-legal-name",
+    "subject": "来自甲辰电子有限公司的AI面试邀请",
+    "sender": "services <noreply@example.invalid>",
+    "body": "您的面试时间：9月22日14:00。",
+    "company": "甲辰电子有限公司",
+    "role": null,
+    "note": "保留原来自某公司句式，不把来自两个字吃进公司名称。"
+  }
+]

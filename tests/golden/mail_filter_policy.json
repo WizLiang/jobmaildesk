@@ -1,0 +1,32 @@
+[
+  {
+    "name": "onsite-with-time-and-venue",
+    "subject": "示例科技校园宣讲会，现场面试直通Offer",
+    "body": "宣讲时间：2026年9月22日14:00。地点：示例大学教学楼301。",
+    "keep_onsite": true
+  },
+  {
+    "name": "online-only",
+    "subject": "示例科技校园招聘云宣讲会",
+    "body": "宣讲时间：2026年9月22日14:00。地点：腾讯会议线上直播。",
+    "keep_onsite": false
+  },
+  {
+    "name": "untimed-campus-session",
+    "subject": "示例科技宣讲会邀约",
+    "body": "地点：示例大学教学楼301。时间另行通知。",
+    "keep_onsite": false
+  },
+  {
+    "name": "venue-not-confirmed",
+    "subject": "示例科技宣讲会邀约",
+    "body": "宣讲时间：2026年9月22日14:00。地点待定。",
+    "keep_onsite": false
+  },
+  {
+    "name": "job-recommendation-with-deadline",
+    "subject": "【智联推荐】示例银行邀您投递",
+    "body": "网申截止2026年9月22日14:00。工作地点：示例大学科技园。",
+    "keep_onsite": false
+  }
+]
