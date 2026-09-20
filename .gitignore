@@ -1,0 +1,55 @@
+# Python / tools
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.uv-cache/
+.coverage
+htmlcov/
+
+# Generated builds and reports (source icons and fixtures remain tracked)
+build/
+build-output/
+dist/
+dist-deliverable/
+release/
+*.zip
+*.exe
+*.app/
+*.log
+
+# Local configuration, credentials, and application data
+.env
+.env.*
+!.env.example
+config.toml
+*.local.toml
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+.ssh/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+JobMailDeskData/
+user-data/
+snapshots/
+*.bak
+*.bak-*/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
