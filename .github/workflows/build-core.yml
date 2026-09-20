@@ -74,8 +74,7 @@ jobs:
           fi
       - run: uv run pytest
       - name: Build macOS app
-        working-directory: packaging/macos
-        run: uv run --project ../.. python setup.py py2app
+        run: uv run python packaging/macos/setup.py py2app --dist-dir packaging/macos/dist
       - name: Package app
         run: |
           built_app="$(find packaging/macos/dist -maxdepth 1 -name '*.app' -print -quit)"
