@@ -9,10 +9,10 @@ param(
 # folder itself; the whole folder (EXE, CLI twin, _internal, icon) is packaged.
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
-if (-not $Version) {
-    $Version = (& uv run --frozen --project $projectRoot python -c "from job_mail_desk import __version__; print(__version__)").Trim()
-    if ($LASTEXITCODE -ne 0 -or -not $Version) { throw "Unable to determine package version" }
-}
+$projectVersion = (& uv run --frozen --project $projectRoot python (Join-Path $PSScriptRoot 'version.py') check).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $projectVersion) { throw "Unable to verify project version" }
+if (-not $Version) { $Version = $projectVersion }
+if ($Version -ne $projectVersion) { throw "Requested package version does not match the source version" }
 
 # Release notes are kept per final version (docs/ACCEPTANCE_v0.7.0.md) while
 # the package may be a pre-release (0.7.0rc1): try the exact name first, then
@@ -40,6 +40,10 @@ foreach ($required in @("JobMailDesk.exe", "JobMailDesk-cli.exe", "_internal", "
     if (-not (Test-Path -LiteralPath (Join-Path $buildDir $required))) {
         throw "Build folder is missing $required : $buildDir"
     }
+}
+foreach ($executable in @('JobMailDesk.exe', 'JobMailDesk-cli.exe')) {
+    $builtVersion = (Get-Item -LiteralPath (Join-Path $buildDir $executable)).VersionInfo.ProductVersion
+    if ($builtVersion -ne $Version) { throw "Built program version does not match package version: $executable" }
 }
 if (-not $OutputDirectory) {
     $OutputDirectory = Split-Path -Parent $buildDir

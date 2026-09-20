@@ -30,6 +30,8 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --frozen --group dev
+      - name: Verify version consistency
+        run: uv run --frozen python scripts/version.py check
       - id: version
         shell: pwsh
         run: |
@@ -77,6 +79,8 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --frozen --group dev
+      - name: Verify version consistency
+        run: uv run --frozen python scripts/version.py check
       - id: version
         run: |
           version="$(uv run python -c 'from job_mail_desk import __version__; print(__version__)')"

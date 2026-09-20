@@ -2799,6 +2799,7 @@ async function showSettingsDialog(firstRun = false, payload = null) {
   settingsForm.elements.github_updates_enabled.checked = Boolean(settings.github_updates_enabled);
   settingsForm.elements.update_channel.value = settings.update_channel || "preview";
   document.querySelector("#githubUpdateSection").classList.toggle("hidden", !settings.github_update_supported);
+  document.querySelector("#githubCurrentVersion").textContent = settings.app_version ? `当前版本：${settings.app_version}` : "";
   if (settings.github_update_supported) refreshGithubUpdate();
   settingsForm.elements.obsidian_enabled.checked = Boolean(settings.obsidian_enabled);
   settingsForm.elements.obsidian_output.value = settings.obsidian_output || "";

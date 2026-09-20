@@ -226,6 +226,32 @@ def prepare_install(archive: Path, install: Path, data_root: Path) -> tuple[Path
     return stage, backup
 
 
+def _release_cache(release: Release | None) -> list[dict]:
+    """Persist only the public fields already validated by select_release."""
+    if release is None:
+        return []
+    return [{"tag_name": f"v{release.version}", "prerelease": release.preview,
+             "body": release.notes,
+             "assets": [{"name": release.archive_name, "browser_download_url": release.archive_url},
+                        {"name": release.archive_name + ".sha256", "browser_download_url": release.checksum_url}]}]
+
+
+def _clean_downloads(folder: Path, *, keep: Path | None = None) -> None:
+    """Remove only our obsolete ZIPs; never follow links or touch backups."""
+    try:
+        if folder.is_symlink() or folder.is_junction() or folder.resolve() != folder.absolute():
+            return
+        for path in folder.iterdir():
+            if (path != keep and re.fullmatch(r"[a-f0-9]{32}\.zip", path.name)
+                    and not path.is_symlink() and not path.is_junction() and path.is_file()):
+                try:
+                    path.unlink()
+                except OSError:
+                    pass  # A locked cache must not prevent another update attempt.
+    except OSError:
+        pass
+
+
 class UpdateService:
     def __init__(self, root: Path, current: str = __version__):
         self.root = root
@@ -274,22 +300,36 @@ class UpdateService:
             raise UpdateError("更新通道无效。")
         marker = self.root / "updates" / "last-check.json"
         if automatic:
+            with self._lock:
+                if self._busy or self._state["status"] == "ready":
+                    return self.snapshot()
             try:
                 cached = json.loads(marker.read_text(encoding="utf-8"))
                 if isinstance(cached, dict) and cached.get("channel") == channel and 0 <= time.time() - float(cached["at"]) < 86400:
-                    return self.snapshot()
-            except (OSError, ValueError, KeyError, TypeError):
+                    release = select_release(cached["releases"], self.current, channel)
+                    with self._lock:
+                        if not self._busy and self._state["status"] != "ready":
+                            self._release = release
+                            self._channel = channel
+                            self._set(status="available" if release else "current", message=f"发现新版 {release.version}" if release else "当前通道暂无可用新版", latest_version=release.version if release else "", notes=release.notes if release else "")
+                        return self.snapshot()
+            except (OSError, ValueError, KeyError, TypeError, UpdateError):
                 pass
         def check():
             self._release = None
             self._archive = None
             self._channel = channel
             self._set(status="checking", message="正在检查 GitHub 发布…", latest_version="", notes="")
-            marker.parent.mkdir(parents=True, exist_ok=True)
-            marker.write_text(json.dumps({"at": time.time(), "channel": channel}), encoding="utf-8")
             payload = json.loads(read_url(API_URL, 2 * 1024 * 1024))
             self._release = select_release(payload, self.current, channel)
             release = self._release
+            try:
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                temporary = marker.with_suffix(".tmp")
+                temporary.write_text(json.dumps({"at": time.time(), "channel": channel, "releases": _release_cache(release)}), encoding="utf-8")
+                temporary.replace(marker)
+            except OSError:
+                pass  # Caching is optional; a successful check remains usable.
             self._set(status="available" if release else "current", message=f"发现新版 {release.version}" if release else "当前通道暂无可用新版", latest_version=release.version if release else "", notes=release.notes if release else "")
         return self._start(check)
 
@@ -298,19 +338,28 @@ class UpdateService:
         if not release:
             raise UpdateError("请先检查可用新版。")
         def download():
-            self._archive = None
+            previous = self._archive
             self._set(status="downloading", message="正在下载更新包…", downloaded=0, total=0)
             folder = self.root / "updates"
             folder.mkdir(parents=True, exist_ok=True)
+            _clean_downloads(folder, keep=previous)
             target = folder / f"{uuid.uuid4().hex}.zip"
             try:
                 checksum = read_url(release.checksum_url, 4096)
                 read_url(release.archive_url, MAX_DOWNLOAD, destination=target, progress=lambda count, total: self._set(downloaded=count, total=total))
                 verify_checksum(target, checksum, release.archive_name)
             except Exception:
-                target.unlink(missing_ok=True)
+                try:
+                    target.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                if previous and previous.is_file() and not previous.is_symlink() and not previous.is_junction():
+                    self._set(status="ready", message="重新下载失败，已保留之前校验通过的更新包，可重启更新。")
+                    return
+                self._archive = None
                 raise
             self._archive = target
+            _clean_downloads(folder, keep=target)
             self._set(status="ready", message="下载与 SHA-256 校验完成，可重启更新")
         return self._start(download)
 

@@ -18,20 +18,29 @@ from job_mail_desk import __version__, ui_app, windows_notify  # noqa: E402
 @pytest.mark.parametrize(
     ("version", "expected"),
     [
-        ("0.7.0rc1", (0, 7, 0, 1)),
-        ("0.7.0", (0, 7, 0, 0)),
-        ("1.2.3b4", (1, 2, 3, 4)),
-        ("0.6.1rc10", (0, 6, 1, 10)),
-        ("2.0.0.post3", (2, 0, 0, 3)),
+        ("0.7.0rc1", (0, 7, 0, 32769)),
+        ("0.7.0", (0, 7, 0, 65535)),
+        ("1.2.3b4", (1, 2, 3, 16388)),
+        ("0.6.1rc10", (0, 6, 1, 32778)),
+        ("2.0.0a3", (2, 0, 0, 3)),
     ],
 )
 def test_version_resource_numbers(version, expected) -> None:
     assert parse_version(version) == expected
 
 
-def test_version_resource_rejects_garbage() -> None:
+@pytest.mark.parametrize("version", ["latest", "0.7.0.post3", "0.7.0.dev1", "0.7.0rc16384", "65536.0.0"])
+def test_version_resource_rejects_garbage(version) -> None:
     with pytest.raises(ValueError):
-        parse_version("latest")
+        parse_version(version)
+
+
+def test_version_resource_orders_prerelease_stages_before_final() -> None:
+    versions = ["0.7.0a0", "0.7.0a16383", "0.7.0b0", "0.7.0b16383", "0.7.0rc0",
+                "0.7.0rc3", "0.7.0rc10", "0.7.0rc16383", "0.7.0", "0.7.1a0"]
+    numbers = [parse_version(version) for version in versions]
+    assert all(earlier < later for earlier, later in zip(numbers, numbers[1:]))
+    assert all(0 <= component <= 65535 for version in numbers for component in version)
 
 
 def test_version_resource_text_evaluates_like_pyinstaller_does(tmp_path) -> None:
@@ -56,8 +65,12 @@ def test_version_resource_text_evaluates_like_pyinstaller_does(tmp_path) -> None
     }
     text = render_version_info("0.7.0rc1")
     eval(compile(text, "version_info.txt", "eval"), namespace)  # noqa: S307 - trusted local text
-    assert captured["filevers"] == (0, 7, 0, 1)
+    assert captured["filevers"] == (0, 7, 0, 32769)
+    assert captured["flags"] == 0x2
     assert "StringStruct('ProductVersion', '0.7.0rc1')" in text
+
+    eval(compile(render_version_info("0.7.0"), "version_info.txt", "eval"), namespace)
+    assert captured["flags"] == 0
 
     written = Path(write_version_info(PROJECT, tmp_path / "version_info.txt"))
     assert f"'FileVersion', '{__version__}'" in written.read_text(encoding="utf-8")

@@ -1,43 +1,50 @@
-# Release checklist
+# Windows 发布清单
 
-JobMailDesk Core 使用带版本号的 Git 标签触发 GitHub 预发布。当前版本尚未完成 Apple 签名、公证与三天真实试运行，因此只能标记为 prerelease。
+当前发布目标为 Windows 10/11 x64。macOS 只允许手动选跑，不是本次发布门禁。当前工作流发布 prerelease；升级到正式版须另行完成签名、人工验收与至少三天真实试运行，并调整正式发布流程。
 
-## 发布前
+每版在 `docs/ACCEPTANCE_v<版本>.md` 记录实际结果、提交 SHA、测试输出摘要、构建链接及未完成项。未执行的检查写“待验证”，不能根据历史版本结果勾选。
 
-- `CHANGELOG.md` 已记录本阶段面向用户的变化。
-- `docs/RELEASE_NOTES_vX.Y.Z.md` 存在，文件名与标签一致。
-- `docs/ACCEPTANCE_vX.Y.Z.md` 存在，并记录本地验收与待由 Actions 完成的远端门禁。
-- 标签 `vX.Y.Z` 必须与 `pyproject.toml`、`job_mail_desk.__version__` 完全一致。
-- Pull Request 的 Windows x64、macOS Apple Silicon、macOS Intel 构建全部通过。
-- `pytest`、秘密扫描与 `git diff --check` 通过。
-- IMAP 保持 `readonly=True` 与 `BODY.PEEK`，扫描前后的未读数和 UID 状态不变。
-- 匿名回归邮件覆盖硬截止、`24:00`、跨日窗口、改期、重复邮件与待确认逻辑。
+## 代码与隐私
 
-## 自动发布
+- [ ] 本轮修改范围冻结，用户可见变化已写入 `CHANGELOG.md`；同一批修复集中发布。
+- [ ] `python scripts/version.py check` 通过，标签 `v<版本>` 与项目三个版本字段完全一致。
+- [ ] 当版 `docs/RELEASE_NOTES_v<版本>.md` 和 `docs/ACCEPTANCE_v<版本>.md` 存在；升级方式、签名状态、已知问题与数据兼容性准确。
+- [ ] 完整 `pytest`、秘密扫描与 `git diff --check` 通过；解析/生命周期变化有匿名回归。
+- [ ] IMAP 仍为 `readonly=True` 与 `BODY.PEEK`；没有引入删除、移动、回复或标记已读。
+- [ ] 仓库、日志、测试、构建目录和发布资产不包含真实邮箱、授权码、邮件正文、私人链接、任务数据或个人路径；仅检查自己的工作产物，避免把用户数据读入诊断输出。
+- [ ] 稳定 ID、旧数据迁移、忽略/删除/结束状态优先级通过相应回归；数据迁移/清除与更新互斥。
 
-1. 合并经过验收的 Pull Request 到 `main`。
-2. 在合并提交上创建并推送 `vX.Y.Z` 标签。
-3. GitHub Actions 构建三个平台包，校验应用 bundle，并生成 SHA-256。
-4. 所有构建成功后，工作流自动创建 GitHub prerelease。
+## Windows 包与运行
 
-自动发布必须包含六个文件：
+- [ ] Windows Actions 使用锁定依赖通过测试、秘密扫描和构建；保留对应提交与运行链接。
+- [ ] 包含完整 `JobMailDesk.exe`、`JobMailDesk-cli.exe`、`JobMailDesk.ico`、`_internal` 及更新 helper；包内版本与标签一致。
+- [ ] 使用隔离的 `JOBMAILDESK_LOCAL_ROOT` 执行包内 `smoke --expect-tasks 0 --expect-applications 0 --expect-unresolved 0`，结果通过，没有连接用户邮箱或复用真实数据。
+- [ ] 已检查包中的源资源、依赖/隐私说明、当版验收记录和快捷方式脚本；不把构建缓存与开发凭据打入 ZIP。
+- [ ] 在 Windows 环境验证首次配置、选择数据目录、缓存启动、缩放、正常退出和重复启动；最终用户无需 Python，仅需 WebView2 Runtime。
+- [ ] 对数据/扫描相关变更验证重复扫描不重复建卡、人工状态不复活、同公司不同岗位不误合并、可选台账/Obsidian 受管区与手写区正确往返。
+- [ ] 如执行真实邮箱回归，保持只读并核对未读数/UID 状态不变；仅保留脱敏汇总。未做原生窗口或真实邮箱检查时明确记录 RC 限制，不伪装为已验证。
 
-- Windows x64 ZIP 与 SHA-256。
-- macOS Apple Silicon ZIP 与 SHA-256。
-- macOS Intel ZIP 与 SHA-256。
+## 更新入口
 
-## 发布后
+- [ ] “设置 → 程序更新”能获取本仓库 Release；每日检查默认关闭，检查只提示，下载和重启需要主动操作。
+- [ ] 预览/正式通道、同版本/低版本、无网络/超时有正确结果，更新失败不影响本地使用。
+- [ ] ZIP 与同名 SHA-256 匹配；损坏、缓存被改、异常跳转、穿越路径、设备名、链接和重复路径被拒绝。
+- [ ] 安装仅替换程序目录，数据目录与系统凭据保持不变；旧进程未退出、权限不足、目录重叠时安全终止。
+- [ ] 已验证替换/回退逻辑；进程启动替身测试不能代替真实 GUI 重启。人工恢复路径、旧程序备份及未签名限制已写入说明。
 
-- 从 GitHub Release 重新下载资产并核对文件数、名称与校验和。
-- 在一台未安装 Python 的 Windows 电脑验证首次配置、缓存首屏、扫描、退出和重复启动。
-- 在真实 Apple Silicon 与 Intel Mac 上验证首次打开、Keychain、系统 WebKit、窗口与退出。
-- 至少完成三天本地真实邮件试运行；在此之前不提升为 stable release。
-- macOS 未签名、公证期间，发布说明必须保留 Gatekeeper 提示。
+## 标签和发布
 
-## 使用者依赖
+- [ ] 已验证提交推送成功且 Windows CI 通过。正式版提交已通过 PR 合并到 `main`；获授权的 RC 分支发布须说明尚未合并情况。
+- [ ] 标签全新，不覆盖旧标签、ZIP 或校验文件；采用附注标签，版本与发布记录一致。
+- [ ] 标签工作流成功发布 prerelease，包含且只包含下列两个资产：
 
-- Windows 10/11 x64，或 macOS 12+。
-- Windows 需要 Edge WebView2 Runtime；Windows 11 通常已预装。
-- 可连接 IMAP 的邮箱及单独生成的授权码；QQ 邮箱默认使用 `imap.qq.com:993`。
-- Obsidian、进展 Markdown 与 AI Research 均为可选项。
-- 最终用户不需要 Python、uv、Codex、模型 API 或境外网络。
+```text
+JobMailDesk-Core-v<版本>-win-x64.zip
+JobMailDesk-Core-v<版本>-win-x64.zip.sha256
+```
+
+- [ ] 从 Release 重新下载两个资产，核对名称、SHA-256、解包与包内自检；不要只验证工作流上传前的本地文件。
+- [ ] 发布说明和 README 下载入口正确；支持更新的旧版能发现新版，`0.7.0rc1` 及以前手动安装一次的提示仍清楚。
+- [ ] 交付说明准确区分“已推分支”“已合并主线”“已发布”，列明尚待用户环境验证的限制。
+
+GitHub 更新需要网络；日常本地功能无需 GitHub、Python、uv、模型 API 或 Obsidian。邮箱扫描需要 IMAP 连接及系统安全存储中的授权码，授权码不得随 Release 或诊断信息上传。

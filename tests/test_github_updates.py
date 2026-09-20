@@ -215,6 +215,157 @@ def test_cached_status_cannot_break_startup(tmp_path):
     assert updates.UpdateService(tmp_path).snapshot()["status"] == "idle"
 
 
+def test_failed_automatic_check_can_retry_without_waiting_a_day(tmp_path, monkeypatch):
+    attempts = []
+    def read(*args, **kwargs):
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise OSError("temporary network failure")
+        return json.dumps([release()]).encode()
+    monkeypatch.setattr(updates, "read_url", read)
+    service = updates.UpdateService(tmp_path, "0.7.0rc1")
+    service.check(automatic=True)
+    assert wait(service)["status"] == "error"
+    assert not (tmp_path / "updates/last-check.json").exists()
+    service.check(automatic=True)
+    assert wait(service)["status"] == "available"
+    assert len(attempts) == 2
+
+
+def test_successful_check_restores_public_release_after_restart(tmp_path, monkeypatch):
+    public_release = dict(release(), extra="must not persist")
+    calls = []
+    def read(*args, **kwargs):
+        calls.append(True)
+        return json.dumps([public_release]).encode()
+    monkeypatch.setattr(updates, "read_url", read)
+    service = updates.UpdateService(tmp_path, "0.7.0rc1")
+    service.check(automatic=True)
+    assert wait(service)["status"] == "available"
+    assert "must not persist" not in (tmp_path / "updates/last-check.json").read_text()
+    restarted = updates.UpdateService(tmp_path, "0.7.0rc1")
+    restored = restarted.check(automatic=True)
+    assert restored["status"] == "available"
+    assert restored["latest_version"] == "0.7.0rc2"
+    assert restarted._release.archive_url == service._release.archive_url
+    assert calls == [True]
+    # The same cached metadata cannot offer a downgrade after upgrading.
+    upgraded = updates.UpdateService(tmp_path, "0.7.0rc2")
+    assert upgraded.check(automatic=True)["status"] == "current"
+    # A different channel does not reuse the preview result.
+    restarted.check("stable", automatic=True)
+    assert wait(restarted)["status"] == "current"
+    assert len(calls) == 2
+
+
+def test_cached_release_urls_are_revalidated_before_offering_install(tmp_path, monkeypatch):
+    folder = tmp_path / "updates"
+    folder.mkdir()
+    cached_release = release()
+    cached_release["assets"][0]["browser_download_url"] = "https://evil.example/update.zip"
+    (folder / "last-check.json").write_text(json.dumps({"at": time.time(), "channel": "preview", "releases": [cached_release]}))
+    monkeypatch.setattr(updates, "read_url", lambda *args, **kwargs: pytest.fail("Valid cache should avoid a request"))
+    service = updates.UpdateService(tmp_path, "0.7.0rc1")
+    assert service.check(automatic=True)["status"] == "current"
+    with pytest.raises(updates.UpdateError):
+        service.download()
+
+
+def test_legacy_timestamp_cache_is_refreshed_and_ready_download_is_preserved(tmp_path, monkeypatch):
+    folder = tmp_path / "updates"
+    folder.mkdir()
+    marker = folder / "last-check.json"
+    marker.write_text(json.dumps({"at": time.time(), "channel": "preview"}))
+    calls = []
+    def read(*args, **kwargs):
+        calls.append(True)
+        return json.dumps([release()]).encode()
+    monkeypatch.setattr(updates, "read_url", read)
+    service = updates.UpdateService(tmp_path, "0.7.0rc1")
+    service.check(automatic=True)
+    assert wait(service)["status"] == "available"
+    service._archive = folder / ("1" * 32 + ".zip")
+    service._archive.write_bytes(b"previously verified")
+    service._set(status="ready")
+    marker.write_text(json.dumps({"at": 0, "channel": "preview", "releases": []}))
+    assert service.check(automatic=True)["status"] == "ready"
+    assert service._archive.read_bytes() == b"previously verified"
+    assert calls == [True]
+
+
+def test_download_cleanup_only_removes_owned_regular_zips(tmp_path, monkeypatch):
+    folder = tmp_path / "updates"
+    folder.mkdir()
+    old_zip = folder / ("a" * 32 + ".zip")
+    old_zip.write_bytes(b"obsolete")
+    user_file = folder / "personal.zip"
+    user_file.write_bytes(b"keep")
+    linked_zip = folder / ("b" * 32 + ".zip")
+    linked_zip.write_bytes(b"link sentinel")
+    directory = folder / ("c" * 32 + ".zip")
+    directory.mkdir()
+    (directory / "notes.txt").write_text("keep")
+    backup = tmp_path / (".jobmaildesk-backup-" + "d" * 32)
+    backup.mkdir()
+    (backup / "program.exe").write_bytes(b"old program")
+    original_is_symlink = Path.is_symlink
+    monkeypatch.setattr(Path, "is_symlink", lambda self: self == linked_zip or original_is_symlink(self))
+    service = updates.UpdateService(tmp_path, "0.7.0rc1")
+    service._release = updates.select_release([release()], "0.7.0rc1", "preview")
+    content = b"verified new bundle"
+    checksum = (hashlib.sha256(content).hexdigest() + "  " + service._release.archive_name).encode()
+    def read(url, limit, *, destination=None, progress=None):
+        if destination:
+            destination.write_bytes(content)
+            return b""
+        return checksum
+    monkeypatch.setattr(updates, "read_url", read)
+    service.download()
+    assert wait(service)["status"] == "ready"
+    first_download = service._archive
+    service.download()
+    assert wait(service)["status"] == "ready"
+    assert not old_zip.exists() and not first_download.exists()
+    assert service._archive.read_bytes() == content
+    assert user_file.read_bytes() == b"keep"
+    assert linked_zip.read_bytes() == b"link sentinel"
+    assert (directory / "notes.txt").read_text() == "keep"
+    assert (backup / "program.exe").read_bytes() == b"old program"
+
+
+def test_download_cleanup_refuses_a_linked_cache_directory(tmp_path, monkeypatch):
+    folder = tmp_path / "updates"
+    folder.mkdir()
+    sentinel = folder / ("a" * 32 + ".zip")
+    sentinel.write_bytes(b"untouched")
+    original_is_junction = Path.is_junction
+    monkeypatch.setattr(Path, "is_junction", lambda self: self == folder or original_is_junction(self))
+    updates._clean_downloads(folder)
+    assert sentinel.read_bytes() == b"untouched"
+
+
+def test_failed_redownload_keeps_previously_ready_bundle(tmp_path, monkeypatch):
+    folder = tmp_path / "updates"
+    folder.mkdir()
+    previous = folder / ("a" * 32 + ".zip")
+    previous.write_bytes(b"previously verified")
+    service = updates.UpdateService(tmp_path, "0.7.0rc1")
+    service._release = updates.select_release([release()], "0.7.0rc1", "preview")
+    service._archive = previous
+    service._set(status="ready")
+    def read(url, limit, *, destination=None, progress=None):
+        if destination:
+            destination.write_bytes(b"corrupt")
+            return b""
+        return ("0" * 64 + "  " + service._release.archive_name).encode()
+    monkeypatch.setattr(updates, "read_url", read)
+    service.download()
+    assert wait(service)["status"] == "ready"
+    assert service._archive == previous
+    assert previous.read_bytes() == b"previously verified"
+    assert list(folder.glob("*.zip")) == [previous]
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows update helper")
 @pytest.mark.parametrize("fail_launch", [False, True])
 def test_native_helper_replaces_or_rolls_back_without_changing_data(tmp_path, fail_launch):

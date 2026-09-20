@@ -9,6 +9,7 @@
 ## 验证
 
 - [ ] `uv run pytest`
+- [ ] `python scripts/version.py check`
 - [ ] `scripts/secret-scan.ps1`
 - [ ] `git diff --check`
 - [ ] 已执行与本次风险对应的 UI / IMAP / Obsidian / 打包验证

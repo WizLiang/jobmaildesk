@@ -1,9 +1,10 @@
 """Generate the Windows VERSIONINFO resource for PyInstaller from pyproject.toml.
 
-Windows wants four numeric components. ``MAJOR.MINOR.PATCH`` map directly and
-a pre-release suffix (``rc1``/``b2``/``a3``) becomes the fourth component, so
-``0.7.0rc1`` -> ``0.7.0.1`` and a final ``0.7.0`` -> ``0.7.0.0``. The human
-readable ``FileVersion``/``ProductVersion`` strings keep the original text.
+Windows wants four unsigned 16-bit components. The fourth component reserves
+ordered ranges for alpha (0-16383), beta (16384-32767), RC (32768-49151), and
+final (65535), so moving from RC to final never lowers the resource version.
+Each prerelease counter is limited to 0-16383; unsupported formats and overflow
+are rejected instead of silently clamped. Human-readable strings stay intact.
 """
 from __future__ import annotations
 
@@ -11,16 +12,22 @@ import re
 import tomllib
 from pathlib import Path
 
-_VERSION = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:(?:a|b|rc)(\d+))?(?:\.post(\d+))?(?:\.dev\d+)?$")
+_NUMBER = r"(0|[1-9][0-9]*)"
+_VERSION = re.compile(rf"{_NUMBER}\.{_NUMBER}\.{_NUMBER}(?:(a|b|rc){_NUMBER})?")
 
 
 def parse_version(version: str) -> tuple[int, int, int, int]:
-    match = _VERSION.match(version.strip())
+    match = _VERSION.fullmatch(version)
     if match is None:
         raise ValueError(f"unsupported version string for a Windows resource: {version!r}")
     major, minor, patch = (int(match.group(index)) for index in (1, 2, 3))
-    fourth = int(match.group(4) or match.group(5) or 0)
-    return major, minor, patch, min(fourth, 65535)
+    if max(major, minor, patch) > 65535:
+        raise ValueError("version components must be between 0 and 65535")
+    stage, counter = match.group(4), int(match.group(5) or 0)
+    if counter > 16383:
+        raise ValueError("prerelease counter must be between 0 and 16383")
+    fourth = {"a": 0, "b": 16384, "rc": 32768}.get(stage, 65535) + counter
+    return major, minor, patch, fourth
 
 
 def project_version(project_root: Path) -> str:
@@ -36,7 +43,7 @@ VSVersionInfo(
     filevers={numbers},
     prodvers={numbers},
     mask=0x3F,
-    flags=0x0,
+    flags={"0x2" if numbers[3] != 65535 else "0x0"},
     OS=0x40004,
     fileType=0x1,
     subtype=0x0,

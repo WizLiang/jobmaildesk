@@ -1,0 +1,34 @@
+name: 问题反馈
+description: 报告 Windows 使用问题，请先隐去个人信息。
+title: "[问题] "
+body:
+  - type: markdown
+    attributes:
+      value: 请勿提交邮箱授权码、原始邮件、配置文件或完整数据目录。邮件识别问题请使用替换公司和岗位名称后的简短样例，并删除邮箱、手机号、链接令牌和个人日程。
+  - type: input
+    id: version
+    attributes:
+      label: 程序版本
+      description: 在“设置 → 程序更新”中查看。
+      placeholder: 例如 0.7.0rc3
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows 版本
+      placeholder: 例如 Windows 11，64 位
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤、预期结果和实际结果
+      description: 如与邮件识别有关，请说明邮件类型和服务商，不要填写邮箱地址。
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 脱敏截图或错误提示（可选）
+      description: 请遮住姓名、邮箱、授权码、个人路径及求职记录。不要拖入配置文件或数据库。

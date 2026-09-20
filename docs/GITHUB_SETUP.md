@@ -21,9 +21,9 @@ Python 源码、测试、构建脚本、依赖锁文件和许可证需要提交�
 3. 在功能分支提交，执行完整测试、秘密扫描和 `git diff --check` 后推送。
 4. 按 `PROJECT_RULES.md` 通过 Pull Request 合入主线；空仓库需先确定初始主线。
 
-当前已有 Windows 本地候选包，但尚不代表正式发布完成。
-推送源码不会自动更新朋友电脑上的程序，也不应顺带创建版本标签或 Release。
-后续发布需完成项目规定的验证；安装包届时作为 Release 附件分发。
+Windows 测试包已通过 [Releases](https://github.com/WizLiang/jobmaildesk/releases) 分发。推送源码不会自动更新朋友电脑上的程序；只有通过发布检查并附有完整 ZIP 和 SHA-256 的 Release 才会被更新器识别。
+Deploy key 负责 Git 拉取和推送，不提供创建或合并 Pull Request 的 API 权限。使用 GitHub 网页创建与合并 PR；无需为此把部署密钥改成账号级密钥。
+日常版本管理和验收步骤见 [维护手册](MAINTENANCE.md)。
 
 ## 日常同步
 

@@ -44,6 +44,8 @@ try {
     # --frozen: the lock file is the authority (same as CI); never resolve anew here.
     uv sync --frozen --group dev
     if ($LASTEXITCODE -ne 0) { throw "uv sync failed with exit code $LASTEXITCODE" }
+    uv run --frozen python scripts/version.py check
+    if ($LASTEXITCODE -ne 0) { throw "Project version fields are inconsistent" }
     if (-not $SkipTests) {
         uv run --frozen pytest -p no:cacheprovider
         if ($LASTEXITCODE -ne 0) { throw "pytest failed with exit code $LASTEXITCODE" }

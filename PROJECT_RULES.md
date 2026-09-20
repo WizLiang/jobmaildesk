@@ -2,7 +2,7 @@
 
 ## 事实层
 
-- `%LOCALAPPDATA%/JobMailDesk/tasks/<id>.md`（macOS 为 `~/Library/Application Support/JobMailDesk/tasks/<id>.md`）是任务事实层。
+- 用户所选数据目录中的 `tasks/<id>.md` 是任务事实层。默认目录为 `%LOCALAPPDATA%/JobMailDesk`（macOS 为 `~/Library/Application Support/JobMailDesk`）；不得在维护或升级时强制改回默认目录。
 - SQLite只保存邮件去重、扫描状态和可重建索引，不作为任务正文来源。
 - 同一邮件使用`source_message_hash`合并；同一公司、岗位、项目与阶段使用稳定申请链，禁止重复建卡。
 
@@ -80,30 +80,18 @@ jobmaildesk task-update <稳定任务ID> [字段参数]
 
 ## 发布
 
-### Windows 定制版当前发布范围（2026-09-20）
+### Windows 定制版发布范围（2026-09-20 起）
 
-用户已明确要求尝试 GitHub 发布并重新支持从本仓库获取更新，macOS 暂不作为支持目标。
-本定制版按 Windows x64 测试、秘密扫描、打包与空数据自检验收；macOS 仅手动选跑。
-经用户授权的试用发布可从已验证功能分支创建唯一 RC 标签并发布为 prerelease，
-在 PR 权限待配置时不阻断试用分发。不得把 RC 宣称为正式完成全部人工验收。
-Windows Release 附带一个 ZIP 和对应 SHA-256；以下历史三平台及 Freeze 条款以此范围为准。
-应用更新仅信任 WizLiang/jobmaildesk，用户主动确认下载和重启，不改动数据或凭据。
-
-- 完整维护流程以`docs/MAINTENANCE.md`为准；本节是不可跳过的发布闸门。
-- `main`是唯一正式主线，不直接在`main`开发；所有阶段修改必须通过短期分支和Pull Request进入主线。
-- 必须区分“推送分支”“合并主线”和“发布安装包”：阶段提交需要推送，验收完成需要合并，只有可交付的程序变化才创建新Release。
-- 本地验收未全部结束时进入 **Release Freeze**：只允许本地 RC 包、功能分支、Draft/Ready PR 和 Actions 构建产物，禁止创建版本标签或 Release。
-- 同一轮集中反馈默认合并为一个版本发布；不得因为每次小修复、文档调整或尚待个人真实数据验证的中间状态反复增加 PATCH Release。
-- 只有本地验收清单全部关闭、真实数据回归完成、版本范围冻结并明确判定“release-ready”后，才允许一次性创建版本标签；发布后新增问题进入下一轮版本，不静默替换资产。
-- Windows包使用PyInstaller，启用Per-Monitor DPI v2。
-- macOS包使用py2app，在真实macOS Runner分别生成arm64与Intel产物。
-- 只有 Pull Request 的 Windows x64、macOS Apple Silicon、macOS Intel 检查全部通过后才能合并并创建版本标签；标签必须对应 `docs/RELEASE_NOTES_vX.Y.Z.md`。
-- 标签构建必须自动发布三个平台 ZIP 及各自 SHA-256，共六个资产；当前未签名、公证或未完成三天试运行的版本必须标记为 prerelease。
-- 发布前必须通过测试、秘密扫描、正常启动、缓存启动、正常退出、Obsidian往返同步和解析回归。
-- 每个可验证的阶段性进展都必须更新`CHANGELOG.md`；禁止只有代码提交而没有面向用户的变更记录。
-- `CHANGELOG.md` 只保留在源码仓库和 Release 展示中，不复制进终端用户安装包；更新入口以纯文本显示本仓库 Release 说明。
-- 阶段验收通过后应形成独立、可回滚的Git提交并推送到GitHub，不把多个完成阶段长期积压在本地工作树。
-- 推送前再次执行`pytest`、秘密扫描和`git diff --check`；远端推送成功后核对提交SHA与GitHub Actions状态。
-- 已发布标签和资产不得覆盖、删除或重新指向；发现问题时发布更高PATCH版本。
-- 合并或发布后必须验证README入口、更新公告和下载链接，确保用户知道如何使用与升级。
-- 本地 RC 交付后，磁盘上只允许存在一个 `JobMailDesk.app`（安装目录里的那个）和一个安装包：`dist/`、`packaging/macos/dist/` 等构建产物必须在打包结束时删除，否则 Spotlight 会把它们索引成重复入口。构建脚本用 `trap ... EXIT` 保证失败路径同样清理，并在结束时核对 `mdfind -name JobMailDesk.app` 只返回一条。
+- 用户已授权 Windows x64 GitHub 试用发布及本仓库更新。macOS 仅手动选跑，不作为 Windows 发布门禁；历史三平台、六资产要求不再适用当前定制版。
+- 完整流程见 `docs/MAINTENANCE.md` 与 `docs/RELEASE_CHECKLIST.md`。必须准确区分“推送分支”“合并主线”和“发布程序”，不可相互替代。
+- `main` 是唯一正式主线，不直接在其上开发；通过短期分支和 Pull Request 合并。正式版标签必须位于经过 PR 验收的 `main` 提交。
+- 经用户授权的 Windows 试用版可从已验证功能分支创建唯一 `rcN` 标签并发布为 prerelease；PR 权限不足不阻断该分发，但须明确尚未合并的状态，并保留后续合并事项。
+- 开发期间保持 Release Freeze，先集中修复、验收、冻结范围，再一次发布。RC 标签前必须通过完整测试、秘密扫描、版本一致性、差异检查、Windows 构建与隔离空数据自检；不得发布有已知隐私泄露、数据损坏或安装阻断的版本。
+- 尚未完成的原生交互、真实邮箱只读回归与长期试运行必须写入 RC 验收记录与发布说明，不能由自动化或历史结果代替。正式版必须完成这些人工验收、旧数据兼容、启用时的台账/Obsidian 往返同步、至少三天真实试运行和 Windows 签名要求。当前工作流始终创建 prerelease。
+- Windows 包使用 PyInstaller，启用 Per-Monitor DPI v2。标签工作流通过 Windows 测试、秘密扫描、构建和空数据自检后，仅发布一个 Windows x64 ZIP 及对应 SHA-256，共两个资产。
+- 版本通过 `python scripts/version.py set <版本>` 同步，使用 `python scripts/version.py check` 检查；标签为 `v<版本>`。必须有完全匹配的 `docs/RELEASE_NOTES_v<版本>.md` 与 `docs/ACCEPTANCE_v<版本>.md`；历史发布记录不批量改写。
+- 用户可见变更必须更新 `CHANGELOG.md` 和相应使用文档。`CHANGELOG.md` 不复制进安装包；更新入口以纯文本显示本仓库 Release 说明。
+- 阶段验收后形成可回滚提交并推送。推送前通过完整测试、秘密扫描、版本检查与 `git diff --check`；核对远端提交 SHA 和 Windows Actions 结果。没有新增修改或疑点时，不重复已通过的验收。
+- 已发布标签和资产不得覆盖、删除或重新指向；问题修复发布更高 RC 或 PATCH。发布后从 GitHub 重新下载核对名称、版本、哈希和包内自检，并检查 README、更新提示及下载入口。
+- 应用更新只信任 `WizLiang/jobmaildesk`；每日检查默认关闭，自动检查仅提示，下载与重启替换需要用户主动操作。只替换程序目录，不改数据位置与凭据；更新与迁移/清除个人信息互斥。
+- 清理只针对本轮确认的临时产物，保留所需回滚包与验收记录，不删除真实用户数据。若手动构建 macOS，仍应清理重复 `.app` 构建副本以免被 Spotlight 索引，保留正在使用的安装目录。

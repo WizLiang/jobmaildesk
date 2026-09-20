@@ -14,9 +14,14 @@
 ## 提交前
 
 ```powershell
-uv run pytest
+python scripts/version.py check
+uv run --frozen pytest
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\secret-scan.ps1
 git diff --check
 ```
 
-Pull Request 应说明变化、原因、用户影响、验证结果、隐私/兼容性影响和回滚方法。三平台 GitHub Actions 全部通过后才能合并。
+开发依赖使用 Python 3.12 与 `uv sync --frozen --group dev` 安装。系统没有相应 Python 时，版本命令可用 `uv run --frozen python scripts/version.py check`。
+
+Pull Request 应说明变化、原因、用户影响、验证结果、隐私/兼容性影响和回滚方法。当前以 Windows x64 GitHub Actions 通过为合并门禁，macOS 仅手动选跑。正式版本来自已合并的 `main`；授权的 Windows RC 可按维护手册的分支发布例外执行，并明确标为 prerelease。
+
+需要改版本时使用 `python scripts/version.py set 0.7.0rcN`（把 `N` 替换为候选序号），再运行 `check`；历史标签和发布资产不得覆盖。先集中修复和验收，再创建一次新版本，纯文档修改通常不单独发包。

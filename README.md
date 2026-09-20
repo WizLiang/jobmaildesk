@@ -4,6 +4,8 @@
 
 这是在原项目基础上持续开发的 Windows 定制版。[下载 Windows 试用版](https://github.com/WizLiang/jobmaildesk/releases)。当前发布均为未签名预发布，尚需真实使用反馈；macOS 不作为当前支持目标。
 
+当前源码版本：**0.7.0rc3**。已发布版本以 [Releases](https://github.com/WizLiang/jobmaildesk/releases) 为准；“设置 → 程序更新”会显示本机正在运行的版本。
+
 ## 当前功能
 
 - 公司、岗位、笔试、面试和截止时间识别；信息不足时显示确认原因和识别来源，支持人工归属。
@@ -44,6 +46,10 @@ Windows 构建：
 ```
 
 构建与发布约束见 [项目规则](PROJECT_RULES.md)，协作方式见 [贡献说明](CONTRIBUTING.md)。运行开发版可能连接已配置邮箱，测试请使用隔离的数据目录。
+
+日常修改、版本升级和发布步骤见 [维护手册](docs/MAINTENANCE.md)。版本校验使用 `python scripts/version.py check`；准备下一版本时用 `python scripts/version.py set <版本号>` 同步源码和锁文件，随后更新日志、Release Notes 和验收记录。该命令不会自动推送或发布。
+
+遇到问题可提交 [问题反馈](https://github.com/WizLiang/jobmaildesk/issues/new/choose)，附程序版本、复现步骤和脱敏截图；请勿上传邮箱授权码、原始邮件、配置文件或完整数据目录。
 
 ## GitHub 同步
 
