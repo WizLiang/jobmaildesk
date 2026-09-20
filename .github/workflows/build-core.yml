@@ -2,12 +2,17 @@ name: Build JobMailDesk Core
 
 on:
   workflow_dispatch:
+    inputs:
+      build_macos:
+        description: Also validate the optional macOS builds
+        type: boolean
+        default: false
   pull_request:
     branches:
       - main
   push:
     branches:
-      - agent/windows-import
+      - agent/**
     tags:
       - "v*"
 
@@ -17,6 +22,7 @@ permissions:
 jobs:
   windows-x64:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v9.0.0
@@ -37,6 +43,12 @@ jobs:
         run: ./scripts/secret-scan.ps1
       - shell: pwsh
         run: ./scripts/build.ps1 -OutputRoot "$PWD/release" -SkipTests -SkipSecretScan
+      - name: Verify clean Windows bundle
+        shell: pwsh
+        run: |
+          $env:JOBMAILDESK_LOCAL_ROOT = "$env:RUNNER_TEMP/jobmaildesk-smoke"
+          & ./release/JobMailDesk/JobMailDesk-cli.exe smoke --expect-tasks 0 --expect-applications 0 --expect-unresolved 0 --report "$env:RUNNER_TEMP/jobmaildesk-smoke.json"
+          if ($LASTEXITCODE -ne 0) { throw "Bundle smoke test failed" }
       - shell: pwsh
         run: ./scripts/package-core.ps1 -ExePath "$PWD/release/JobMailDesk" -Version "${{ steps.version.outputs.version }}" -OutputDirectory "$PWD/release"
       - uses: actions/upload-artifact@v7
@@ -48,6 +60,7 @@ jobs:
           if-no-files-found: error
 
   macos:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_macos
     strategy:
       fail-fast: false
       matrix:
@@ -99,7 +112,6 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
       - windows-x64
-      - macos
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -107,6 +119,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
+          pattern: '*-win-x64'
           path: release
           merge-multiple: true
       - name: Create GitHub prerelease
@@ -117,9 +130,9 @@ jobs:
           acceptance="docs/ACCEPTANCE_${GITHUB_REF_NAME}.md"
           test -f "$notes"
           test -f "$acceptance"
-          test "$(find release -maxdepth 1 -type f | wc -l | tr -d ' ')" -eq 6
+          test "$(find release -maxdepth 1 -type f | wc -l | tr -d ' ')" -eq 2
           version="${GITHUB_REF_NAME#v}"
-          for platform in win-x64 macos-arm64 macos-x64; do
+          for platform in win-x64; do
             archive="release/JobMailDesk-Core-v${version}-${platform}.zip"
             checksum="${archive}.sha256"
             test -f "$archive"
