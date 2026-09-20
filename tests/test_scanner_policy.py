@@ -1,3 +1,4 @@
+from job_mail_desk.credentials import MailCredential
 from job_mail_desk.config import Settings
 from datetime import datetime, timedelta
 
@@ -37,7 +38,7 @@ def _configure_scan_test(
     monkeypatch.setattr(scanner, "STATE_DB", tmp_path / "state.db")
     monkeypatch.setattr(scanner, "DASHBOARD_FILE", tmp_path / "dashboard.md")
     monkeypatch.setattr(scanner, "ImapReader", reader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "parse_record", parse_record)
 
 
@@ -376,7 +377,7 @@ def test_scan_processes_reused_message_id_uids_independently(
     monkeypatch.setattr(scanner, "STATE_DB", tmp_path / "state.db")
     monkeypatch.setattr(scanner, "DASHBOARD_FILE", tmp_path / "dashboard.md")
     monkeypatch.setattr(scanner, "ImapReader", FakeReader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "parse_record", fake_parse)
 
     first = scanner.scan_once(Settings(), days=3)
@@ -707,7 +708,7 @@ def test_scan_does_not_expire_application_paused_task(
     monkeypatch.setattr(scanner, "DICTIONARIES_DIR", tmp_path / "dictionaries")
     monkeypatch.setattr(scanner, "ensure_directories", lambda: None)
     monkeypatch.setattr(scanner, "ImapReader", FakeReader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "set_dock_badge", lambda _count: None)
 
     scanner.scan_once(
@@ -758,7 +759,7 @@ def test_one_parser_failure_does_not_abort_the_mail_batch(tmp_path, monkeypatch)
     monkeypatch.setattr(scanner, "STATE_DB", tmp_path / "state.db")
     monkeypatch.setattr(scanner, "DASHBOARD_FILE", tmp_path / "dashboard.md")
     monkeypatch.setattr(scanner, "ImapReader", FakeReader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "parse_record", fake_parse)
 
     summary = scanner.scan_once(Settings(), days=3)
@@ -768,8 +769,8 @@ def test_one_parser_failure_does_not_abort_the_mail_batch(tmp_path, monkeypatch)
 
     repeated = scanner.scan_once(Settings(), days=3)
     assert repeated.fetched == 2
-    assert repeated.parse_failed == 0
-    assert repeated.skipped == 2
+    assert repeated.parse_failed == 1
+    assert repeated.skipped == 1
 
     forced = scanner.scan_once(Settings(), days=3, force_reprocess=True)
     assert forced.fetched == 2
@@ -816,7 +817,7 @@ def test_parser_upgrade_and_manual_retry_only_replay_no_fact_records(
     monkeypatch.setattr(scanner, "STATE_DB", tmp_path / "state.db")
     monkeypatch.setattr(scanner, "DASHBOARD_FILE", tmp_path / "dashboard.md")
     monkeypatch.setattr(scanner, "ImapReader", FakeReader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "PARSER_VERSION", "v2")
 
     state = StateStore(tmp_path / "state.db")
@@ -830,7 +831,7 @@ def test_parser_upgrade_and_manual_retry_only_replay_no_fact_records(
         source_migrations=(scope,),
         source_identity_version=SOURCE_IDENTITY_VERSION,
     )
-    state.set_metadata("identity_learning_bootstrap_version", "v2")
+    state.set_metadata("identity_learning_bootstrap_version", scanner.parser_version_for_settings(Settings()))
     hashes = [_record_source_hashes(item)[0] for item in records]
     state.record_outcome(
         hashes[0],
@@ -867,7 +868,7 @@ def test_parser_upgrade_and_manual_retry_only_replay_no_fact_records(
     upgraded = scanner.scan_once(Settings(), days=40)
     assert parsed_uids == ["1", "2"]
     assert upgraded.skipped == 2
-    assert state.metadata("parser_version") == "v2"
+    assert state.metadata("parser_version") == scanner.parser_version_for_settings(Settings())
 
     manually_retried = scanner.scan_once(
         Settings(),
@@ -940,7 +941,7 @@ def test_parser_upgrade_fetch_failure_keeps_uid_replay_debt(
     state = StateStore(tmp_path / "state.db")
     scope = MailboxScope(fingerprint, "INBOX", "61")
     _commit_scan_baseline(state, parser_version="v1", scope=scope)
-    state.set_metadata("identity_learning_bootstrap_version", "v2")
+    state.set_metadata("identity_learning_bootstrap_version", scanner.parser_version_for_settings(Settings()))
     source_hash, _ = _record_source_hashes(record)
     state.record_outcome(
         source_hash,
@@ -954,23 +955,24 @@ def test_parser_upgrade_fetch_failure_keeps_uid_replay_debt(
 
     debt = state.outcome(source_hash)
     assert failed_fetch.fetch_failed == 1
-    assert state.metadata("parser_version") == "v2"
+    assert state.metadata("parser_version") == scanner.parser_version_for_settings(Settings())
     assert debt.outcome == "noncandidate"
     assert debt.parser_version == "v1"
     assert state.has_parser_replay_debt(
-        "v2",
+        scanner.parser_version_for_settings(Settings()),
         replay_cutoff=now - timedelta(days=30),
     )
 
     scanner.scan_once(Settings(lookback_days=3))
 
     replayed = state.outcome(source_hash)
-    assert requested_days == [INITIAL_LOOKBACK_DAYS, INITIAL_LOOKBACK_DAYS]
+    assert requested_days[0] == INITIAL_LOOKBACK_DAYS
+    assert requested_days[1] >= INITIAL_LOOKBACK_DAYS
     assert parsed_uids == [record.uid]
     assert replayed.outcome == "noncandidate"
-    assert replayed.parser_version == "v2"
+    assert replayed.parser_version == scanner.parser_version_for_settings(Settings())
     assert not state.has_parser_replay_debt(
-        "v2",
+        scanner.parser_version_for_settings(Settings()),
         replay_cutoff=now - timedelta(days=30),
     )
 
@@ -1036,7 +1038,7 @@ def test_parser_upgrade_mime_failure_keeps_uid_replay_debt(
     state = StateStore(tmp_path / "state.db")
     scope = MailboxScope(fingerprint, "INBOX", "66")
     _commit_scan_baseline(state, parser_version="v1", scope=scope)
-    state.set_metadata("identity_learning_bootstrap_version", "v2")
+    state.set_metadata("identity_learning_bootstrap_version", scanner.parser_version_for_settings(Settings()))
     source_hash, _ = _record_source_hashes(record)
     state.record_outcome(
         source_hash,
@@ -1049,17 +1051,18 @@ def test_parser_upgrade_mime_failure_keeps_uid_replay_debt(
     scanner.scan_once(Settings(lookback_days=3))
 
     failed = state.outcome(source_hash)
-    assert state.metadata("parser_version") == "v2"
+    assert state.metadata("parser_version") == scanner.parser_version_for_settings(Settings())
     assert failed.outcome == "parse_failed"
     assert failed.parser_version is None
 
     scanner.scan_once(Settings(lookback_days=3))
 
     replayed = state.outcome(source_hash)
-    assert requested_days == [INITIAL_LOOKBACK_DAYS, INITIAL_LOOKBACK_DAYS]
+    assert requested_days[0] == INITIAL_LOOKBACK_DAYS
+    assert requested_days[1] >= INITIAL_LOOKBACK_DAYS
     assert parsed_uids == [record.uid]
     assert replayed.outcome == "noncandidate"
-    assert replayed.parser_version == "v2"
+    assert replayed.parser_version == scanner.parser_version_for_settings(Settings())
 
 
 def test_pending_review_replays_after_failed_upgrade_fetch(
@@ -1124,7 +1127,7 @@ def test_pending_review_replays_after_failed_upgrade_fetch(
     state = StateStore(tmp_path / "state.db")
     scope = MailboxScope(fingerprint, "INBOX", "62")
     _commit_scan_baseline(state, parser_version="v1", scope=scope)
-    state.set_metadata("identity_learning_bootstrap_version", "v2")
+    state.set_metadata("identity_learning_bootstrap_version", scanner.parser_version_for_settings(Settings()))
     source_hash, _ = _record_source_hashes(record)
     unresolved = UnresolvedStore(tmp_path / "unresolved")
     unresolved.save(
@@ -1140,20 +1143,21 @@ def test_pending_review_replays_after_failed_upgrade_fetch(
 
     scanner.scan_once(Settings(lookback_days=3))
 
-    assert state.metadata("parser_version") == "v2"
+    assert state.metadata("parser_version") == scanner.parser_version_for_settings(Settings())
     assert state.outcome(source_hash).parser_version == "v1"
     assert unresolved.load(source_hash).parser_version == "v1"
 
     scanner.scan_once(Settings(lookback_days=3))
 
     refreshed = unresolved.load(source_hash)
-    assert requested_days == [INITIAL_LOOKBACK_DAYS, INITIAL_LOOKBACK_DAYS]
+    assert requested_days[0] == INITIAL_LOOKBACK_DAYS
+    assert requested_days[1] >= INITIAL_LOOKBACK_DAYS
     assert parse_calls == 1
     assert refreshed is not None
     assert refreshed.revision == 2
-    assert refreshed.parser_version == "v2"
+    assert refreshed.parser_version == scanner.parser_version_for_settings(Settings())
     assert state.outcome(source_hash).outcome == "pending"
-    assert state.outcome(source_hash).parser_version == "v2"
+    assert state.outcome(source_hash).parser_version == scanner.parser_version_for_settings(Settings())
 
 
 def test_asr_noncandidate_from_previous_parser_replays_into_review(
@@ -1200,7 +1204,7 @@ def test_asr_noncandidate_from_previous_parser_replays_into_review(
     monkeypatch.setattr(scanner, "STATE_DB", tmp_path / "state.db")
     monkeypatch.setattr(scanner, "DASHBOARD_FILE", tmp_path / "dashboard.md")
     monkeypatch.setattr(scanner, "ImapReader", FakeReader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
 
     state = StateStore(tmp_path / "state.db")
     scope = MailboxScope("f" * 24, "INBOX", "1")
@@ -1278,7 +1282,7 @@ def test_failed_scan_retries_crash_state_without_replaying_completed_parse(
     monkeypatch.setattr(scanner, "STATE_DB", tmp_path / "state.db")
     monkeypatch.setattr(scanner, "DASHBOARD_FILE", tmp_path / "dashboard.md")
     monkeypatch.setattr(scanner, "ImapReader", FakeReader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "PARSER_VERSION", "v2")
 
     state = StateStore(tmp_path / "state.db")
@@ -1289,7 +1293,7 @@ def test_failed_scan_retries_crash_state_without_replaying_completed_parse(
         candidates=0,
         parser_version="v1",
     )
-    state.set_metadata("identity_learning_bootstrap_version", "v2")
+    state.set_metadata("identity_learning_bootstrap_version", scanner.parser_version_for_settings(Settings()))
     parse_calls = 0
 
     def fake_parse(mail_record, dictionaries=None):
@@ -1321,7 +1325,7 @@ def test_failed_scan_retries_crash_state_without_replaying_completed_parse(
     scanner.scan_once(Settings(), days=3)
 
     assert parse_calls == 1
-    assert state.metadata("parser_version") == "v2"
+    assert state.metadata("parser_version") == scanner.parser_version_for_settings(Settings())
     assert not state.source_migration_needed(scope, SOURCE_IDENTITY_VERSION)
 
 
@@ -1352,7 +1356,7 @@ def test_fetch_failures_are_retryable_and_report_safe_counts(
     monkeypatch.setattr(scanner, "STATE_DB", tmp_path / "state.db")
     monkeypatch.setattr(scanner, "DASHBOARD_FILE", tmp_path / "dashboard.md")
     monkeypatch.setattr(scanner, "ImapReader", FakeReader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
 
     summary = scanner.scan_once(Settings(), days=3)
 
@@ -1467,7 +1471,7 @@ def test_old_pending_hash_is_replayed_in_place_on_parser_upgrade(
     monkeypatch.setattr(scanner, "STATE_DB", tmp_path / "state.db")
     monkeypatch.setattr(scanner, "DASHBOARD_FILE", tmp_path / "dashboard.md")
     monkeypatch.setattr(scanner, "ImapReader", FakeReader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "parse_record", fake_parse)
 
     summary = scanner.scan_once(Settings(), days=3)
@@ -1478,7 +1482,7 @@ def test_old_pending_hash_is_replayed_in_place_on_parser_upgrade(
     assert parse_calls == 1
     assert refreshed is not None
     assert refreshed.revision == 2
-    assert refreshed.parser_version == scanner.PARSER_VERSION
+    assert refreshed.parser_version == scanner.parser_version_for_settings(Settings())
     assert unresolved.load(canonical_hash) is None
     assert StateStore(tmp_path / "state.db").outcome(
         canonical_hash
@@ -1649,7 +1653,7 @@ def test_identity_preview_batches_resolution_without_writing_state(
     monkeypatch.setattr(scanner, "DICTIONARIES_DIR", tmp_path / "dictionaries")
     monkeypatch.setattr(scanner, "STATE_DB", tmp_path / "state.db")
     monkeypatch.setattr(scanner, "ImapReader", FakeReader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "parse_record", fake_parse)
 
     summary = scanner.scan_once(
@@ -1771,7 +1775,7 @@ def test_registry_scan_groups_batch_receipt_and_persists_unresolved(
     monkeypatch.setattr(scanner, "STATE_DB", tmp_path / "state.db")
     monkeypatch.setattr(scanner, "DASHBOARD_FILE", tmp_path / "dashboard.md")
     monkeypatch.setattr(scanner, "ImapReader", FakeReader)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "parse_record", fake_parse)
 
     summary = scanner.scan_once(Settings(progress_source=ledger), days=3)

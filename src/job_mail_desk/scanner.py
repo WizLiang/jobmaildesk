@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta
 from email.utils import parseaddr
+import hashlib
+import json
 import logging
+import math
 import re
 
 from .application_registry import ApplicationRegistry, preview_progress_applications
@@ -22,7 +25,7 @@ from .config import (
 from .credentials import load_credential
 from .data_lock import data_directory_lease
 from .exporter import export_dashboard, import_checked_states
-from .mail_reader import ImapReader, MailFetchBatch
+from .mail_reader import ImapReader, MailFetchBatch, account_fingerprint
 from .macos_dock import set_dock_badge
 from .identity_dictionaries import load_identity_dictionaries
 from .identity_learning import IdentityLearningStore
@@ -35,13 +38,13 @@ from .private_link_store import PrivateLinkStore
 from .research import synchronize_research_state
 from .runtime_control import RuntimeControl, RuntimeStopping
 from .scan_progress import report_progress, track_items
-from .state import MailboxScope, StateStore
+from .state import MailboxScope, ScanCoverage, StateStore
 from .stages import is_stage_advance
 from .task_service import (
     critical_time,
     message_hash,
 )
-from .unresolved_store import UnresolvedStore, unresolved_from_decision
+from .unresolved_store import UnresolvedStore, filtered_from_mail, unresolved_from_decision
 
 
 LOGGER = logging.getLogger(__name__)
@@ -79,7 +82,7 @@ class ScanSummary:
 
 
 def parser_version_for_settings(settings: Settings) -> str:
-    return PARSER_VERSION + ("+onsite" if settings.include_onsite_sessions else "")
+    return PARSER_VERSION + "+filtered-review-v1" + ("+onsite" if settings.include_onsite_sessions else "")
 
 
 def parse_for_settings(record, dictionaries, settings: Settings):
@@ -399,6 +402,16 @@ def _prepare_uid_source_migration(
     return pending_scopes
 
 
+def _scan_scope_key(settings: Settings, email: str) -> str:
+    # Preserve existing message IDs; only scan coverage distinguishes endpoints.
+    folder = settings.mail_folder
+    if folder.casefold() == "inbox":
+        folder = "INBOX"
+    identity = [account_fingerprint(settings.mail_host, email), settings.mail_port,
+                settings.mail_ssl, folder]
+    return hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
 def _effective_lookback_days(
     settings: Settings,
     state: StateStore,
@@ -406,9 +419,27 @@ def _effective_lookback_days(
     *,
     parser_changed: bool = False,
     replay_debt: bool = False,
+    coverage: ScanCoverage | None = None,
+    scoped: bool = False,
+    now: datetime | None = None,
 ) -> int:
     if requested_days is not None:
         return requested_days
+    if scoped:
+        now = now or datetime.now(SHANGHAI)
+        baseline = max(INITIAL_LOOKBACK_DAYS, settings.lookback_days)
+        if coverage is None:
+            return baseline
+        boundary = coverage.covered_until or coverage.required_since
+        if coverage.pending_since is not None:
+            boundary = min(boundary, coverage.pending_since)
+        # An extra overlap day for completed coverage avoids clock/SEARCH timing
+        # edges. Failed initial attempts retain their original required_since.
+        gap = math.ceil(max(0, (now - boundary).total_seconds()) / 86400)
+        if coverage.covered_until is not None and coverage.pending_since is None:
+            gap += 1
+        return max(settings.lookback_days, gap,
+                   baseline if parser_changed or replay_debt or coverage.covered_until is None else 1)
     if parser_changed or replay_debt or not state.has_successful_scan():
         return max(INITIAL_LOOKBACK_DAYS, settings.lookback_days)
     return settings.lookback_days
@@ -962,20 +993,52 @@ def _scan_once_impl(
     migration_scopes: tuple[MailboxScope, ...] = ()
     fact_lease = None
     preview: list[dict[str, object]] = []
+    coverage_key = None
+    coverage_start = None
+    coverage_until = None
+    retry_incomplete = False
     try:
+        # One immutable settings/credential snapshot is used for scope and login.
+        credential = load_credential()
+        coverage_key = _scan_scope_key(settings, credential.email)
+        coverage_until = datetime.now(SHANGHAI)
+        baseline_since = coverage_until - timedelta(days=max(INITIAL_LOOKBACK_DAYS, settings.lookback_days))
+        coverage = (state.scan_coverage(coverage_key) if shadow else
+                    state.prepare_scan_coverage(coverage_key, baseline_since))
+        retry_incomplete = bool(coverage and coverage.pending_since is not None)
         effective_days = _effective_lookback_days(
             settings,
             state,
             days,
             parser_changed=parser_changed,
             replay_debt=replay_debt,
+            coverage=coverage,
+            scoped=True,
+            now=coverage_until,
         )
+        coverage_start = coverage_until - timedelta(days=effective_days)
+        if retry_incomplete:
+            parser_replay_cutoff = coverage_start
+        if not shadow:
+            attempt_start = coverage_start
+            if coverage and coverage.pending_since is not None:
+                # Keep the original retry anchor. Rounding an automatic retry
+                # to whole days must not expand the debt by a day every poll.
+                requested_window = days if days is not None else max(
+                    settings.lookback_days,
+                    INITIAL_LOOKBACK_DAYS if parser_changed or replay_debt else 1,
+                )
+                attempt_start = min(coverage.pending_since,
+                                    coverage_until - timedelta(days=requested_window))
+            state.begin_coverage_attempt(coverage_key, attempt_start)
         report_progress(runtime_control, "connecting", lookback_days=effective_days)
         reader = ImapReader(
             settings,
-            load_credential(),
+            credential,
             runtime_control=runtime_control,
         )
+        # Match the persisted boundary exactly, including the first 30-day scan.
+        reader.scan_started_at = coverage_until
         batch = _fetch_scan_batch(reader, effective_days)
         records = list(batch.records)
         report_progress(runtime_control, "preparing_records")
@@ -1149,7 +1212,7 @@ def _scan_once_impl(
                     and current_outcome.outcome
                     in {"resolved", "ignored", "tombstoned"}
                 )
-                and ((recheck_pending and record_internal_date is not None
+                and (((recheck_pending or retry_incomplete) and record_internal_date is not None
                       and record_internal_date >= parser_replay_cutoff) or state.parser_replay_due(
                     existing_review.parser_version,
                     scan_parser_version,
@@ -1229,6 +1292,12 @@ def _scan_once_impl(
                 elif diagnostics["recruiting_marketing"]:
                     filtered_count += 1
                     outcome = "filtered"
+                    if existing_review is None:
+                        filtered = unresolved_store.put_filtered(filtered_from_mail(
+                            source_hash, record, parser_version=scan_parser_version,
+                        ))
+                        review_records[filtered.id] = filtered
+                        reviews_by_locator[source_hash] = filtered
                 if (
                     existing_review
                     and existing_review.status in {"pending", "filtered"}
@@ -1494,6 +1563,8 @@ def _scan_once_impl(
         if fact_lease is not None:
             fact_lease.__exit__(None, None, None)
             fact_lease = None
+        if runtime_control:
+            runtime_control.raise_if_stopping()
         state.finish_scan(
             run_id,
             skipped=skipped,
@@ -1512,6 +1583,9 @@ def _scan_once_impl(
             source_identity_version=(
                 SOURCE_IDENTITY_VERSION if not shadow else None
             ),
+            coverage_key=coverage_key if not shadow else None,
+            coverage_start=coverage_start,
+            coverage_until=coverage_until,
         )
         return summary
     except Exception as exc:

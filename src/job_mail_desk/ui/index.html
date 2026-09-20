@@ -53,6 +53,7 @@
     <div id="reviewTools" class="review-tools" hidden>
       <button type="button" id="historyScanButton">补扫历史邮件…</button>
       <button type="button" id="ignoredReviewsButton">已忽略邮件</button>
+      <button type="button" id="filteredReviewsButton">自动过滤</button>
     </div>
     </main>
 
@@ -111,6 +112,13 @@
       <p>这里只显示手动忽略的待归属邮件。恢复后回到待处理，由你确认归属；不会修改邮箱中的邮件。</p>
       <p id="ignoredReviewsStatus" role="status" aria-live="polite"></p>
       <div id="ignoredReviewsList"></div>
+    </dialog>
+    <dialog id="filteredReviewsDialog" class="mail-tools-dialog" aria-labelledby="filteredReviewsTitle">
+      <div class="dialog-head"><h2 id="filteredReviewsTitle">自动过滤的邮件</h2><button type="button" id="closeFilteredReviews" aria-label="关闭自动过滤邮件">×</button></div>
+      <p>这里只显示被自动过滤的招聘宣传摘要，不保存邮件正文。若有需要参加的活动，可以移回待处理后确认归属。</p>
+      <p>升级前未留摘要的邮件，可通过“补扫历史邮件”重新检查。恢复不会修改邮箱中的邮件。</p>
+      <p id="filteredReviewsStatus" role="status" aria-live="polite"></p>
+      <div id="filteredReviewsList"></div>
     </dialog>
     <dialog id="quickCreateDialog" class="quick-create-dialog" aria-labelledby="quickCreateTitle">
       <div class="quick-create">
@@ -432,8 +440,9 @@
 
         <section class="settings-section">
           <h3>邮箱与扫描</h3>
+          <p id="activeMailAccount"></p>
           <label>邮箱账号<input name="email" type="email" autocomplete="username" placeholder="请输入完整邮箱地址"></label>
-          <label>客户端授权码<input name="authorization_code" type="password" autocomplete="new-password" placeholder="已配置时留空即可"></label>
+          <label>客户端授权码<input name="authorization_code" type="password" autocomplete="new-password" placeholder="同一账号可留空；更换邮箱需填写新授权码"></label>
           <label>邮件服务商
             <select name="mail_provider" id="mailProvider">
               <option value="qq">QQ</option>
@@ -454,7 +463,7 @@
             <label>扫描间隔（分钟）<input name="poll_minutes" type="number" min="5" max="120" value="10"></label>
             <label>日常回看天数<input name="lookback_days" type="number" min="1" max="30" value="3"></label>
           </div>
-          <p>首次扫描最近 30 天，包含已读和未读邮件；之后按日常回看天数定时扫描并去重。程序退出后停止扫描，关闭窗口留在托盘时继续运行。</p>
+          <p>每个邮箱首次扫描最近 30 天，包含已读和未读邮件；之后按日常回看天数扫描，停用后自动补齐未扫描的时间段。部分失败时保留缺口，下次继续重试。程序退出后停止扫描，关闭窗口留在托盘时继续运行。</p>
           <label class="toggle-label"><input name="include_onsite_sessions" type="checkbox">保留有明确时间和线下地点的宣讲会</label>
           <p>默认过滤宣传邮件。开启后，符合条件的线下宣讲会先进入待处理，由你决定是否加入日历；线上宣讲、岗位推荐和邀投简历仍过滤。真实投递回执、个人笔试／面试及进度通知始终保留。</p>
           <p>保存此选项后，下次扫描会复查最近 30 天。自动过滤的记录可以重新出现；手动忽略和已确认的记录保持不变。</p>

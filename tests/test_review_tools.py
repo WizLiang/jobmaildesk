@@ -1,3 +1,4 @@
+from job_mail_desk.credentials import MailCredential
 from dataclasses import replace
 from datetime import datetime, timedelta
 
@@ -37,7 +38,7 @@ def desk(tmp_path, monkeypatch):
     monkeypatch.setattr(ui_app, "UNRESOLVED_DIR", tmp_path / "unresolved")
     monkeypatch.setattr(scanner, "DICTIONARIES_DIR", tmp_path / "dict")
     monkeypatch.setattr(scanner, "ensure_directories", lambda: None)
-    monkeypatch.setattr(scanner, "load_credential", lambda: object())
+    monkeypatch.setattr(scanner, "load_credential", lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, "_learn_from_confirmed_records", lambda *a, **kw: {})
     windows = []
 
@@ -70,7 +71,8 @@ def test_history_scan_adds_only_within_range_and_deduplicates(desk, days):
     assert api.trigger_scan(days)["summary"]["reviews_created"] == 0
     assert settings.lookback_days == 3
     api.trigger_scan()
-    assert windows[-1] == 3
+    # A seven-day first rescan did not establish the required initial coverage.
+    assert windows[-1] >= 30 if days == 7 else windows[-1] == 3
 
 
 @pytest.mark.parametrize("status", ["pending", "ignored", "resolved", "tombstoned"])

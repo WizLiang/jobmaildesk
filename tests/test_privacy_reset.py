@@ -44,7 +44,7 @@ def test_reset_erases_all_owned_data_and_all_three_credentials(tmp_path, monkeyp
         (root / directory / "private.txt").write_text("private")
     for name in ("state.db", "state.db-wal", "state.db-shm", "private-links.json",
                  "activity-state.json", "config.toml", "custom-progress.md", "Custom.ics",
-                 ".private-links-abcd.tmp", "config.toml.tmp"):
+                 ".private-links-abcd.tmp", "config.toml.tmp", ".config-mail-settings-fixture.tmp"):
         (root / name).write_text("private")
     external = tmp_path / "obsidian.md"
     external.write_text("keep")

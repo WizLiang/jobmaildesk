@@ -12,6 +12,7 @@ import yaml
 from .frontmatter_cache import load_document
 from .identity_pipeline import IdentityDecision
 from .markdown_store import FRONTMATTER, _atomic_write
+from .models import MailRecord
 from .privacy import redact_text
 from .stages import is_terminal_stage
 
@@ -312,6 +313,73 @@ def unresolved_from_decision(
     return _with_current_semantic_hash(record)
 
 
+def filtered_from_mail(
+    source_hash: str,
+    mail: MailRecord,
+    *,
+    parser_version: str,
+) -> UnresolvedRecord:
+    """Keep a reviewable header for marketing mail, never its body or links.
+
+    A filtered message has no parsed event. Do not infer application identity,
+    dates or actions just to display it in the separate filtered list.
+    """
+    title = re.sub(
+        r"(?i)(?:\b[a-z][a-z0-9+.-]*://|www\.|mailto:)\S+",
+        "[链接已隐藏]",
+        mail.subject,
+    )
+    title = re.sub(
+        r"(?:尊敬的?|亲爱的?)\s*[^，,!！:：【】\s]{1,12}(?:同学|先生|女士)",
+        "[称呼已隐藏]",
+        title,
+    )
+    # Unicode word boundaries do not separate Chinese labels from an email.
+    title = re.sub(
+        r"(?i)(?<![a-z0-9._%+-])[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}",
+        "[邮箱已隐藏]",
+        title,
+    )
+    title = re.sub(
+        r"(?i)(学号|考生号|身份证号)\s*[:：=]?\s*[a-z0-9]{6,}",
+        lambda match: f"{match.group(1)}：[已隐藏]",
+        title,
+    )
+    title = re.sub(
+        r"(?i)(通行证|验证码|授权码|密码|口令|token|code)\s*[:：=]\s*[^\s，,;；]+",
+        lambda match: f"{match.group(1)}：[已隐藏]",
+        title,
+    )
+    record = UnresolvedRecord(
+        id=source_hash,
+        status="filtered",
+        resolution_status="unresolved",
+        reason="recruiting-marketing",
+        company=None,
+        role=None,
+        recruiting_project=None,
+        event_type="notice",
+        stage="招聘通知",
+        round=None,
+        received_at=mail.received_at,
+        start_at=None,
+        end_at=None,
+        deadline_at=None,
+        action_summary="识别为招聘宣传，已自动过滤；可恢复到待处理后人工确认。",
+        title=_private_safe(title)[:240],
+        requirements=(),
+        confidence=0.0,
+        change_type="new",
+        candidate_application_keys=(),
+        resolved_application_key=None,
+        resolved_task_id=None,
+        rule_version="marketing-filter-v1",
+        parser_version=parser_version,
+        mail_locator=mail.locator(),
+    )
+    return _with_current_semantic_hash(record)
+
+
 def _frontmatter_block(content: str) -> str | None:
     """Return the YAML block, ending only at a line that is exactly '---'.
 
@@ -397,6 +465,17 @@ class UnresolvedStore:
         self.save(record)
         return record
 
+    def put_filtered(self, record: UnresolvedRecord) -> UnresolvedRecord:
+        """Create a filtered header once; existing human choices remain final."""
+        if record.status != "filtered" or record.reason != "recruiting-marketing":
+            raise ValueError("只能保存自动过滤的招聘宣传记录。")
+        existing = self.load(record.id)
+        if existing:
+            return self.filter_marketing(record.id, parser_version=record.parser_version)
+        record = _with_current_semantic_hash(record)
+        self.save(record)
+        return record
+
     def load(self, source_hash: str) -> UnresolvedRecord | None:
         return next((item for item in self.all() if item.id == source_hash), None)
 
@@ -455,12 +534,27 @@ class UnresolvedStore:
         self.save(updated)
         return updated
 
+    def restore_filtered(self, source_hash: str, expected_revision: int) -> UnresolvedRecord:
+        """Restore only after the service has checked protected outcome indexes."""
+        record = self.load(source_hash)
+        if (not record or record.status != "filtered"
+                or type(expected_revision) is not int or record.revision != expected_revision):
+            raise ValueError("记录已变化，请刷新自动过滤列表后重试。")
+        if (record.resolved_application_key or record.resolved_task_id
+                or record.confirmation_operation_id or record.progress_node_id or record.resolved_at):
+            raise ValueError("已有归属的邮件不能从这里恢复。")
+        updated = replace(record, status="pending", revision=record.revision + 1, manual_restore=True)
+        self.save(updated)
+        return updated
+
     def filter_marketing(self, source_hash: str, *, parser_version: str) -> UnresolvedRecord:
         """Withdraw only an unconfirmed broadcast, preserving its source ID."""
         record = self.load(source_hash)
         if not record:
             raise KeyError(source_hash)
-        if record.status not in {"pending", "filtered"} or record.manual_restore:
+        if (record.status not in {"pending", "filtered"} or record.manual_restore
+                or record.resolved_application_key or record.resolved_task_id
+                or record.confirmation_operation_id or record.progress_node_id or record.resolved_at):
             return record
         updated = _with_current_semantic_hash(replace(
             record,
