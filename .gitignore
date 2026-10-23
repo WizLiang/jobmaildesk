@@ -27,6 +27,7 @@ release/
 .env.*
 !.env.example
 config.toml
+.config-mail-settings-*.tmp
 *.local.toml
 *.pem
 *.key

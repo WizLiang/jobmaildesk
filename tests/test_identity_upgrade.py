@@ -1,3 +1,4 @@
+from job_mail_desk.credentials import MailCredential
 from dataclasses import replace
 from datetime import datetime, timedelta
 
@@ -55,7 +56,7 @@ def test_identity_upgrade_repairs_pending_in_place_and_preserves_manual_decision
         monkeypatch.setattr(scanner, name, tmp_path / path)
     monkeypatch.setattr(scanner, 'ensure_directories', lambda: None)
     monkeypatch.setattr(scanner, 'ImapReader', Reader)
-    monkeypatch.setattr(scanner, 'load_credential', lambda: object())
+    monkeypatch.setattr(scanner, 'load_credential', lambda: MailCredential("synthetic@example.invalid", "synthetic-code"))
     monkeypatch.setattr(scanner, '_learn_from_confirmed_records', lambda *a, **kw: {})
     scanner.scan_once(Settings(progress_enabled=False))
     assert windows == [30]
@@ -64,7 +65,7 @@ def test_identity_upgrade_repairs_pending_in_place_and_preserves_manual_decision
         assert actual.id == old.id
         assert actual.company == company and actual.role == '数字设计工程师'
         assert actual.location == '深圳'
-        assert actual.parser_version == scanner.PARSER_VERSION
+        assert actual.parser_version == scanner.parser_version_for_settings(Settings())
         assert actual.status == 'pending'
     else:
         assert actual == old

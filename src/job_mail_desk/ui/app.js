@@ -485,13 +485,18 @@ function renderHealth() {
         `读取 ${details.fetched || 0} 封，识别候选 ${details.candidates || 0} 封` +
         (details.skipped == null ? "" : `，去重跳过 ${details.skipped} 封`) +
         (details.filtered == null ? "" : `，宣传过滤 ${details.filtered} 封`) +
-        `，读取失败 ${details.fetch_failed || 0} 封。` +
-        (first ? ` 首次完成扫描：读取 ${first.fetched} 封，候选 ${first.candidates} 封。` : "")
+        `，读取失败 ${details.fetch_failed || 0} 封，识别失败 ${details.parse_failed || 0} 封。` +
+        (first ? ` 本机首次扫描记录：读取 ${first.fetched} 封，候选 ${first.candidates} 封。` : "")
       : "尚无扫描记录";
   }
   if (health.last_error) {
     healthText.textContent = `最近错误：${health.last_error}`;
     healthDot.className = "health-dot error";
+    return;
+  }
+  if (details && (details.fetch_failed || details.parse_failed)) {
+    healthText.textContent = `扫描部分完成：读取失败 ${details.fetch_failed || 0} 封，识别失败 ${details.parse_failed || 0} 封；下次扫描继续重试`;
+    healthDot.className = "health-dot warning";
     return;
   }
   if (health.last_scan_at) {
@@ -2784,6 +2789,9 @@ async function showSettingsDialog(firstRun = false, payload = null) {
       : "当前使用隔离测试目录或此平台暂不支持更换位置。";
   settingsForm.elements.email.value = settings.email || "";
   settingsForm.elements.authorization_code.value = "";
+  document.querySelector("#activeMailAccount").textContent = settings.active_mail_account
+    ? `当前扫描账号：${settings.active_mail_account}。修改后需保存才会生效。`
+    : "尚未配置扫描账号。也可以先使用本地待办功能。";
   const configuredProvider = settings.mail_provider || settings.provider || "custom";
   settingsForm.elements.mail_provider.value =
     MAIL_PROVIDER_PRESETS[configuredProvider] ? configuredProvider : "custom";
@@ -3079,7 +3087,15 @@ async function saveAppSettings(event) {
     state.persistedFontScale = Number(saved.ui_font_scale || payload.ui_font_scale);
     applyFontScale(state.persistedFontScale);
     state.settingsFirstRun = false;
-    settingsDialog.close();
+    settingsForm.elements.authorization_code.value = "";
+    if (saved.save_warning) {
+      document.querySelector("#settingsStatus").textContent = saved.save_warning;
+      document.querySelector("#activeMailAccount").textContent = saved.active_mail_account
+        ? `当前扫描账号：${saved.active_mail_account}。修改后需保存才会生效。`
+        : "尚未配置扫描账号。也可以先使用本地待办功能。";
+    } else {
+      settingsDialog.close();
+    }
     await refresh({ reason: "settings" });
   } catch (error) {
     document.querySelector("#settingsStatus").textContent =
@@ -3446,6 +3462,10 @@ async function scanMailbox(button, idleText, days = null) {
         changes + (navigationWasChanged ? "；已保留当前页签" : "");
       healthDot.className = "health-dot";
     }
+    if (summary.fetch_failed || summary.parse_failed) {
+      healthText.textContent = `扫描部分完成：读取失败 ${summary.fetch_failed || 0} 封，识别失败 ${summary.parse_failed || 0} 封；下次扫描继续重试`;
+      healthDot.className = "health-dot warning";
+    }
   } catch (error) {
     healthText.textContent = error?.message || "邮箱扫描失败，请检查设置";
     healthDot.className = "health-dot error";
@@ -3764,41 +3784,55 @@ document.querySelector("#startHistoryScan").addEventListener("click", async (eve
 });
 
 const ignoredReviewsDialog = document.querySelector("#ignoredReviewsDialog");
-let ignoredReviewsLoading = false;
-async function loadIgnoredReviews() {
-  const status = document.querySelector("#ignoredReviewsStatus");
-  const list = document.querySelector("#ignoredReviewsList");
-  ignoredReviewsLoading = true;
+const filteredReviewsDialog = document.querySelector("#filteredReviewsDialog");
+const reviewListsLoading = {ignored: false, filtered: false};
+async function loadReviewList(kind) {
+  const automatic = kind === "filtered";
+  const status = document.querySelector(`#${kind}ReviewsStatus`);
+  const list = document.querySelector(`#${kind}ReviewsList`);
+  const dialog = automatic ? filteredReviewsDialog : ignoredReviewsDialog;
+  reviewListsLoading[kind] = true;
   list.replaceChildren();
   status.textContent = "正在读取…";
   try {
-    const records = await window.pywebview.api.list_ignored_reviews();
-    status.textContent = records.length ? `共 ${records.length} 封手动忽略的邮件` : "暂无手动忽略的邮件。";
+    const records = automatic
+      ? await window.pywebview.api.list_filtered_reviews()
+      : await window.pywebview.api.list_ignored_reviews();
+    const description = automatic ? "自动过滤的邮件" : "手动忽略的邮件";
+    status.textContent = records.length ? `共 ${records.length} 封${description}` : `暂无${description}。`;
     for (const record of records) {
       const row = document.createElement("article");
       row.className = "ignored-review-row";
       const title = document.createElement("strong");
       title.textContent = record.title || `${record.company || "公司待确认"}｜${record.role || "岗位待确认"}`;
       const meta = document.createElement("p");
-      meta.textContent = `${record.company || "公司待确认"}｜${record.role || "岗位待确认"} · ${new Date(record.received_at).toLocaleDateString("zh-CN")}`;
+      meta.textContent = automatic
+        ? `${record.reason_label || "招聘宣传或岗位推荐"} · ${new Date(record.received_at).toLocaleDateString("zh-CN")}`
+        : `${record.company || "公司待确认"}｜${record.role || "岗位待确认"} · ${new Date(record.received_at).toLocaleDateString("zh-CN")}`;
       const restore = document.createElement("button");
       restore.type = "button";
-      restore.textContent = "恢复到待处理";
+      restore.textContent = automatic ? "移回待处理" : "恢复到待处理";
       restore.addEventListener("click", async () => {
-        if (ignoredReviewsLoading) return;
-        ignoredReviewsLoading = true;
+        if (reviewListsLoading[kind]) return;
+        reviewListsLoading[kind] = true;
         restore.disabled = true;
+        dialog.dataset.writing = "true";
         status.textContent = "正在恢复…";
         try {
-          await window.pywebview.api.restore_ignored_review(record.id, record.revision);
+          if (automatic) {
+            await window.pywebview.api.restore_filtered_review(record.id, record.revision);
+          } else {
+            await window.pywebview.api.restore_ignored_review(record.id, record.revision);
+          }
         } catch (error) {
-          await loadIgnoredReviews();
+          await loadReviewList(kind);
           status.textContent = error?.message || "恢复失败，请刷新后重试。";
           return;
         } finally {
-          ignoredReviewsLoading = false;
+          reviewListsLoading[kind] = false;
+          delete dialog.dataset.writing;
         }
-        await loadIgnoredReviews();
+        await loadReviewList(kind);
         status.textContent = "已恢复到待处理。请返回后确认归属。";
         await refresh({reason: "review-restored"});
       });
@@ -3808,15 +3842,24 @@ async function loadIgnoredReviews() {
   } catch (error) {
     status.textContent = error?.message || "读取失败，请关闭后重试。";
   } finally {
-    ignoredReviewsLoading = false;
+    reviewListsLoading[kind] = false;
   }
 }
 document.querySelector("#ignoredReviewsButton").addEventListener("click", async () => {
   if (!apiReady()) return;
   ignoredReviewsDialog.showModal();
-  await loadIgnoredReviews();
+  await loadReviewList("ignored");
 });
-document.querySelector("#closeIgnoredReviews").addEventListener("click", () => ignoredReviewsDialog.close());
+document.querySelector("#filteredReviewsButton").addEventListener("click", async () => {
+  if (!apiReady()) return;
+  filteredReviewsDialog.showModal();
+  await loadReviewList("filtered");
+});
+for (const [selector, dialog] of [["#closeIgnoredReviews", ignoredReviewsDialog], ["#closeFilteredReviews", filteredReviewsDialog]]) {
+  document.querySelector(selector).addEventListener("click", () => {
+    if (dialog.dataset.writing !== "true") dialog.close();
+  });
+}
 
 document.querySelector("#scanButton").addEventListener("click", async () => {
   const button = document.querySelector("#scanButton");

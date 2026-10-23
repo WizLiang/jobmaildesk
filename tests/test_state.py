@@ -119,7 +119,9 @@ def test_retry_policy_is_bounded_and_never_replays_facts(tmp_path) -> None:
         internal_date=recent,
         replay_cutoff=now - timedelta(days=30),
     )
-    assert not state.should_process(
+    # Failed work is retryable whenever the scanner includes it in a window;
+    # the rule-upgrade cutoff only limits successful non-candidate replays.
+    assert state.should_process(
         "old",
         parser_version="v2",
         parser_changed=True,
@@ -277,6 +279,7 @@ def test_source_migration_and_telemetry_commit_only_on_success(tmp_path) -> None
         "last_error": None,
         "searched_uids": 3,
         "fetch_failures": 1,
+        "parse_failures": 0,
         "uidvalidity": "777",
         "uidnext": "44",
     }

@@ -43,6 +43,13 @@ class MailboxScope:
 
 
 @dataclass(frozen=True)
+class ScanCoverage:
+    required_since: datetime
+    covered_until: datetime | None
+    pending_since: datetime | None = None
+
+
+@dataclass(frozen=True)
 class MessageOutcome:
     source_hash: str
     outcome: MailOutcomeName
@@ -117,6 +124,11 @@ class StateStore:
                     key TEXT PRIMARY KEY,
                     value TEXT
                 );
+                CREATE TABLE IF NOT EXISTS scan_coverage (
+                    scope_key TEXT PRIMARY KEY,
+                    required_since TEXT NOT NULL,
+                    covered_until TEXT
+                );
                 CREATE TABLE IF NOT EXISTS sent_reminders (
                     task_id TEXT NOT NULL,
                     target_at TEXT NOT NULL,
@@ -146,6 +158,7 @@ class StateStore:
                 ("parse_failed", "INTEGER"),
             ):
                 self._ensure_column(connection, "scan_runs", column, definition)
+            self._ensure_column(connection, "scan_coverage", "pending_since", "TEXT")
             parser_row = connection.execute(
                 "SELECT value FROM metadata WHERE key = 'parser_version'"
             ).fetchone()
@@ -285,6 +298,23 @@ class StateStore:
                 connection.execute(
                     "UPDATE message_outcomes SET outcome = 'pending', retry_eligible = 0, "
                     "updated_at = ? WHERE source_hash = ? AND outcome = 'ignored'",
+                    (datetime.now().astimezone().isoformat(), source_hash),
+                )
+
+    def restore_filtered_review(self, source_hashes: set[str]) -> None:
+        """Restore an automatic filter without overriding a human decision."""
+        with closing(self._connect()) as connection, connection:
+            connection.execute("BEGIN IMMEDIATE")
+            for source_hash in source_hashes:
+                row = connection.execute(
+                    "SELECT outcome FROM message_outcomes WHERE source_hash = ?", (source_hash,),
+                ).fetchone()
+                if row and row["outcome"] in {"resolved", "tombstoned", "ignored"}:
+                    raise ValueError("邮件已确认、已删除或已手动忽略，不能从自动过滤列表恢复。")
+            for source_hash in source_hashes:
+                connection.execute(
+                    "UPDATE message_outcomes SET outcome = 'pending', retry_eligible = 0, "
+                    "updated_at = ? WHERE source_hash = ? AND outcome = 'filtered'",
                     (datetime.now().astimezone().isoformat(), source_hash),
                 )
 
@@ -511,9 +541,9 @@ class StateStore:
             return True
         if not current.retry_eligible:
             return False
-        if current.outcome in {"seen", "fetch_failed"}:
-            return True
-        if current.outcome == "parse_failed" and current.parser_version is None:
+        if current.outcome in {"seen", "fetch_failed", "parse_failed"}:
+            # A failed parse is unfinished work, even when the rules have not
+            # changed. Skipping it would falsely report the retry as complete.
             return True
         # ``parser_changed`` is retained for call-site compatibility, but the
         # committed global version cannot settle debt for rows that were not
@@ -561,6 +591,59 @@ class StateStore:
                 """
             ).fetchone()
         return row is not None
+
+    def scan_coverage(self, scope_key: str) -> ScanCoverage | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT required_since, covered_until, pending_since FROM scan_coverage WHERE scope_key = ?",
+                (scope_key,),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            required = datetime.fromisoformat(row["required_since"])
+            covered = datetime.fromisoformat(row["covered_until"]) if row["covered_until"] else None
+            pending = datetime.fromisoformat(row["pending_since"]) if row["pending_since"] else None
+            if any(value is not None and value.tzinfo is None for value in (required, covered, pending)):
+                raise ValueError
+            if covered is not None and covered < required:
+                raise ValueError
+        except (TypeError, ValueError) as exc:
+            # Never turn corrupt coverage into an apparently successful fresh scan.
+            raise ValueError("邮箱扫描覆盖记录无效，请检查本地数据后重试。") from exc
+        return ScanCoverage(required, covered, pending)
+
+    def prepare_scan_coverage(self, scope_key: str, required_since: datetime) -> ScanCoverage:
+        """Persist the initial boundary before I/O, including failed first attempts."""
+        if not re.fullmatch(r"[0-9a-f]{64}", scope_key) or required_since.tzinfo is None:
+            raise ValueError("无效的邮箱扫描范围。")
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO scan_coverage (scope_key, required_since) VALUES (?, ?)",
+                (scope_key, required_since.isoformat()),
+            )
+        coverage = self.scan_coverage(scope_key)
+        if coverage is None:
+            raise RuntimeError("邮箱扫描范围未能保存。")
+        return coverage
+
+    def begin_coverage_attempt(self, scope_key: str, start: datetime) -> None:
+        """Retain the attempted range until a complete run covers it, even on crash."""
+        if start.tzinfo is None:
+            raise ValueError("无效的邮箱扫描范围。")
+        with closing(self._connect()) as connection, connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT pending_since FROM scan_coverage WHERE scope_key = ?", (scope_key,),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("邮箱扫描范围未初始化。")
+            pending = datetime.fromisoformat(row["pending_since"]) if row["pending_since"] else None
+            if pending is None or start < pending:
+                connection.execute(
+                    "UPDATE scan_coverage SET pending_since = ? WHERE scope_key = ?",
+                    (start.isoformat(), scope_key),
+                )
 
     def parser_version_changed(self, version: str) -> bool:
         """Compare the committed parser version without mutating scan state."""
@@ -621,6 +704,9 @@ class StateStore:
         filtered: int = 0,
         parse_failed: int = 0,
         error: str | None = None,
+        coverage_key: str | None = None,
+        coverage_start: datetime | None = None,
+        coverage_until: datetime | None = None,
     ) -> None:
         safe_error = (
             error
@@ -707,6 +793,24 @@ class StateStore:
                                 finished_at,
                             ),
                         )
+                if (not fetch_failed and not parse_failed and coverage_key
+                        and coverage_start is not None and coverage_until is not None):
+                    row = connection.execute(
+                        "SELECT required_since, covered_until, pending_since FROM scan_coverage WHERE scope_key = ?",
+                        (coverage_key,),
+                    ).fetchone()
+                    if row is not None:
+                        boundary = datetime.fromisoformat(row["covered_until"] or row["required_since"])
+                        if row["pending_since"]:
+                            boundary = min(boundary, datetime.fromisoformat(row["pending_since"]))
+                        # A narrow explicit rescan must not skip an uncovered interval.
+                        # Use scan start, not completion: mail arriving during FETCH
+                        # was not necessarily in that run's SEARCH result.
+                        if coverage_start <= boundary < coverage_until:
+                            connection.execute(
+                                "UPDATE scan_coverage SET covered_until = ?, pending_since = NULL WHERE scope_key = ?",
+                                (coverage_until.isoformat(), coverage_key),
+                            )
             connection.commit()
 
     def health(self) -> dict[str, object]:
@@ -734,6 +838,7 @@ class StateStore:
             "last_error": metadata.get("last_error"),
             "searched_uids": int(latest["searched"]) if latest else 0,
             "fetch_failures": int(latest["fetch_failed"]) if latest else 0,
+            "parse_failures": int(latest["parse_failed"] or 0) if latest else 0,
             "uidvalidity": (
                 str(latest["uidvalidity"])
                 if latest and latest["uidvalidity"]

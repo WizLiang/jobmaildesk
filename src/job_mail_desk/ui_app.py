@@ -116,7 +116,7 @@ from .runtime_control import (
 from .scanner import bootstrap_identity_learning, scan_once, _source_hash_from_locator
 from .review_explanation import explain_review
 from .scan_alerts import NEW_MAIL_TITLE, announce_new_reviews, new_pending_reviews, pending_snapshot
-from .scheduler import create_background_scheduler
+from .scheduler import create_background_scheduler, retire_background_scheduler
 from .state import StateStore
 from .task_service import (
     create_manual_task,
@@ -760,6 +760,7 @@ class DesktopApi:
             "storage_move_completed": (LOCAL_ROOT / ".storage-move-complete").exists(),
             "credential_configured": credential_configured,
             "email": email,
+            "active_mail_account": email,
             "mail_provider": self._settings.mail_provider,
             "provider": self._settings.mail_provider,
             "mail_host": self._settings.mail_host,
@@ -874,30 +875,69 @@ class DesktopApi:
         return {"status": "pending"}
 
     def save_app_settings(self, payload: dict[str, object]) -> dict[str, object]:
-        self._runtime_control.raise_if_stopping()
-        authorization_code = str(payload.get("authorization_code") or "").strip()
-        updated = settings_from_payload(self._settings, payload)
-        for label, enabled, path in (
-            ("Obsidian输出", updated.obsidian_enabled, updated.obsidian_output),
-            ("求职进展输出", updated.progress_enabled, updated.progress_output),
-        ):
-            if enabled and path.suffix.lower() != ".md":
-                raise ValueError(f"{label}必须是 .md 文件。")
-        if updated.progress_source and updated.progress_source.suffix.lower() != ".md":
-            raise ValueError("手动进展台账必须是 .md 文件。")
-        if updated.obsidian_enabled:
-            updated.obsidian_output.parent.mkdir(parents=True, exist_ok=True)
-        if updated.progress_enabled:
-            updated.progress_output.parent.mkdir(parents=True, exist_ok=True)
-        if authorization_code:
-            save_credential(str(payload.get("email") or ""), authorization_code)
-        write_settings(updated)
-        (LOCAL_ROOT / ".privacy-reset-complete").unlink(missing_ok=True)
-        self._settings = updated
-        self._export(MarkdownTaskStore(TASKS_DIR))
-        if self._on_settings_saved:
-            self._on_settings_saved(updated)
-        return self.get_app_settings()
+        from .mail_settings import credential_from_form, config_rollback_on_mail_save_failure
+
+        with self._privacy_reset_lock:
+            self._runtime_control.raise_if_stopping()
+            # Keep an in-flight scan's IMAP settings and account together.
+            if not self._scan_lock.acquire(blocking=False):
+                raise ValueError("正在扫描或更新本地记录，请稍后保存设置；当前修改尚未保存。")
+            try:
+                self._runtime_control.raise_if_stopping()
+                email = str(payload.get("email") or "").strip()
+                authorization_code = str(payload.get("authorization_code") or "").strip()
+                existing = None
+                if not authorization_code:
+                    try:
+                        existing = load_credential()
+                    except RuntimeError:
+                        pass
+                credential = credential_from_form(email, authorization_code, existing)
+                updated = settings_from_payload(self._settings, payload)
+                for label, enabled, path in (
+                    ("Obsidian输出", updated.obsidian_enabled, updated.obsidian_output),
+                    ("求职进展输出", updated.progress_enabled, updated.progress_output),
+                ):
+                    if enabled and path.suffix.lower() != ".md":
+                        raise ValueError(f"{label}必须是 .md 文件。")
+                if updated.progress_source and updated.progress_source.suffix.lower() != ".md":
+                    raise ValueError("手动进展台账必须是 .md 文件。")
+                if updated.obsidian_enabled:
+                    updated.obsidian_output.parent.mkdir(parents=True, exist_ok=True)
+                if updated.progress_enabled:
+                    updated.progress_output.parent.mkdir(parents=True, exist_ok=True)
+                with config_rollback_on_mail_save_failure(CONFIG_PATH):
+                    write_settings(updated)
+                    if authorization_code and credential is not None:
+                        save_credential(credential.email, credential.authorization_code)
+                self._settings = updated
+                if self._on_settings_saved:
+                    try:
+                        self._on_settings_saved(updated)
+                    except Exception:
+                        # The account is committed. Never let an old scheduler
+                        # continue using its old host with the new credential.
+                        self._runtime_control.begin_stop()
+                        saved = self.get_app_settings()
+                        saved["save_warning"] = (
+                            "设置已保存，但自动扫描暂未恢复，已暂停运行。请从托盘退出后重新启动程序。"
+                        )
+                        return saved
+                warnings = []
+                try:
+                    (LOCAL_ROOT / ".privacy-reset-complete").unlink(missing_ok=True)
+                except Exception:
+                    warnings.append("清理完成提示暂未更新，可稍后重新保存设置重试。")
+                try:
+                    self._export(MarkdownTaskStore(TASKS_DIR))
+                except Exception:
+                    warnings.append("导出文档暂未更新，可稍后重新保存设置重试。")
+                saved = self.get_app_settings()
+                if warnings:
+                    saved["save_warning"] = "设置已保存。" + "".join(warnings)
+                return saved
+            finally:
+                self._scan_lock.release()
 
     def get_calendar_status(self) -> dict[str, object]:
         return {
@@ -936,20 +976,22 @@ class DesktopApi:
         return self._runtime_control.scan_progress.snapshot()
 
     def test_mail_settings(self, payload: dict[str, object]) -> dict[str, object]:
+        from .mail_settings import credential_from_form
+
         email = str(payload.get("email") or "").strip()
         authorization_code = str(payload.get("authorization_code") or "").strip()
+        existing = None
         if not authorization_code:
             try:
                 existing = load_credential()
             except RuntimeError:
-                return {"ok": False, "detail": "请先填写IMAP授权码。"}
-            email = email or existing.email
-            authorization_code = existing.authorization_code
+                pass
         try:
+            credential = credential_from_form(email, authorization_code, existing, required=True)
             temporary_settings = settings_from_payload(self._settings, payload)
             snapshot = ImapReader(
                 temporary_settings,
-                MailCredential(email=email, authorization_code=authorization_code),
+                credential,
             ).mailbox_snapshot()
             return {
                 "ok": True,
@@ -1254,6 +1296,40 @@ class DesktopApi:
         # fails, a later scan reconciles pending index rows back to ignored.
         StateStore(STATE_DB).restore_ignored_review(keys)
         restored = reviews.restore_ignored(source_hash, expected_revision)
+        self._record_activity(
+            dedup_key=f"review:{source_hash}:restored:r{restored.revision}",
+            kind="review.restored", tabs=("today", "review"), company=record.company,
+            entity_id=f"review:{source_hash}",
+        )
+        return {"status": "ok"}
+
+    def list_filtered_reviews(self) -> list[dict[str, object]]:
+        with self._scan_lock:
+            records = [record for record in UnresolvedStore(UNRESOLVED_DIR).all()
+                       if record.status == "filtered" and not record.resolved_task_id
+                       and not record.resolved_application_key
+                       and not record.confirmation_operation_id
+                       and not record.progress_node_id and not record.resolved_at]
+            return [{"id": record.id, "revision": record.revision,
+                     "title": record.title,
+                     "received_at": record.received_at.isoformat(),
+                     "reason_label": "招聘宣传、宣讲推广或岗位推荐"}
+                    for record in sorted(records, key=lambda item: item.received_at, reverse=True)]
+
+    @fact_mutation
+    def restore_filtered_review(self, source_hash: str, expected_revision: int) -> dict[str, object]:
+        reviews = UnresolvedStore(UNRESOLVED_DIR)
+        record = reviews.load(source_hash)
+        if (type(expected_revision) is not int or not record
+                or record.status != "filtered" or record.revision != expected_revision
+                or record.resolved_task_id or record.resolved_application_key
+                or record.confirmation_operation_id or record.progress_node_id or record.resolved_at):
+            raise ValueError("记录已变化，请刷新自动过滤列表后重试。")
+        keys = {record.id, _source_hash_from_locator(record.mail_locator)} - {None}
+        # Leave the Markdown fact filtered until the rebuildable index is safe.
+        # A failed fact write is reconciled from that fact on the next scan.
+        StateStore(STATE_DB).restore_filtered_review(keys)
+        restored = reviews.restore_filtered(source_hash, expected_revision)
         self._record_activity(
             dedup_key=f"review:{source_hash}:restored:r{restored.revision}",
             kind="review.restored", tabs=("today", "review"), company=record.company,
@@ -3598,6 +3674,9 @@ def _run_ui_primary(settings: Settings) -> None:
             scheduler_holder["value"] = None
         if not current:
             return
+        # Saving settings owns scan_lock until this callback completes. Retire
+        # old workers before releasing that lock, including already queued jobs.
+        retire_background_scheduler(current)
         try:
             current.shutdown(wait=False)
         except SchedulerNotRunningError:

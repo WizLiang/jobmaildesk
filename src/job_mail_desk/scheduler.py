@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from threading import Event
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -33,20 +34,29 @@ class ScheduledJobs:
         self.settings = settings
         self.runtime_control = runtime_control or RuntimeControl()
         self.lock = self.runtime_control.scan_lock
+        self._retired = Event()
+
+    def retire(self) -> None:
+        """Invalidate queued workers before replacing their settings snapshot."""
+        self._retired.set()
 
     def scan(self) -> None:
-        if self.runtime_control.stopping:
-            return
-        try:
-            load_credential()
-        except RuntimeError:
-            LOGGER.debug("未配置 IMAP 凭据，跳过邮件扫描")
+        if self._retired.is_set() or self.runtime_control.stopping:
             return
         if not self.lock.acquire(blocking=False):
             LOGGER.info("上一次扫描尚未结束，本次跳过")
             return
         try:
             self.runtime_control.raise_if_stopping()
+            # A worker may have paused before acquiring the lock while settings
+            # were saved. shutdown(wait=False) alone does not cancel that worker.
+            if self._retired.is_set():
+                return
+            try:
+                load_credential()
+            except RuntimeError:
+                LOGGER.debug("未配置 IMAP 凭据，跳过邮件扫描")
+                return
             unresolved_store = UnresolvedStore(UNRESOLVED_DIR)
             before = pending_snapshot(unresolved_store)
             summary = scan_once(
@@ -67,6 +77,8 @@ class ScheduledJobs:
             self.lock.release()
 
     def digest(self, period: str) -> None:
+        if self._retired.is_set() or self.runtime_control.stopping:
+            return
         try:
             path = generate_digest(
                 period,
@@ -78,6 +90,8 @@ class ScheduledJobs:
             LOGGER.exception("%s 简报生成失败", period)
 
     def reminders(self) -> None:
+        if self._retired.is_set() or self.runtime_control.stopping:
+            return
         try:
             sent = send_due_reminders(
                 MarkdownTaskStore(TASKS_DIR).all(),
@@ -90,7 +104,7 @@ class ScheduledJobs:
             LOGGER.exception("任务提醒失败")
 
     def calendar_sync(self) -> None:
-        if not self.settings.calendar_sync_enabled:
+        if self._retired.is_set() or self.runtime_control.stopping or not self.settings.calendar_sync_enabled:
             return
         state = StateStore(STATE_DB)
         if state.metadata("calendar_sync_status") == "permission_denied":
@@ -177,13 +191,21 @@ def create_background_scheduler(
     runtime_control: RuntimeControl | None = None,
 ) -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone=settings.timezone)
-    _add_jobs(
+    jobs = _add_jobs(
         scheduler,
         settings,
         initial_delay_seconds=15,
         runtime_control=runtime_control,
     )
+    scheduler._jobmaildesk_jobs = jobs
     return scheduler
+
+
+def retire_background_scheduler(scheduler: BackgroundScheduler) -> None:
+    """Prevent old callbacks from running after a replacement scheduler starts."""
+    jobs = getattr(scheduler, "_jobmaildesk_jobs", None)
+    if jobs is not None:
+        jobs.retire()
 
 
 def run_forever(settings: Settings) -> None:
