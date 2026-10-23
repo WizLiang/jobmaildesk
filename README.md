@@ -57,8 +57,8 @@ Windows 构建：
 
 本定制版仓库目标为 `WizLiang/jobmaildesk`。Windows SSH 配置、首次导入和日常同步见 [GitHub 使用说明](docs/GITHUB_SETUP.md)。
 
-仓库只管理源码、测试和文档；个人配置、邮件记录、授权码、私钥和本地构建产物不应提交。`.gitignore` 是基础防护，提交前仍需审阅文件和执行秘密扫描。
+仓库只管理源码、测试和文档；个人配置、邮件记录、授权码、私钥和本地构建产物不应提交。
 
 ## 许可与来源
 
-本项目基于 [Chpeeeeea/job-mail-desk](https://github.com/Chpeeeeea/job-mail-desk) 二次开发，保留原作者版权与 MIT 许可。参见 [LICENSE](LICENSE.md)、[第三方声明](THIRD_PARTY_NOTICES.md) 和 [更新日志](CHANGELOG.md)。历史版本文档记录上游当时状态，不代表本定制版已完成相同验收。
+本项目基于 [Chpeeeeea/job-mail-desk](https://github.com/Chpeeeeea/job-mail-desk) 二次开发，保留原作者版权与 MIT 许可。参见 [LICENSE](LICENSE.md)、[第三方声明](THIRD_PARTY_NOTICES.md) 和 [更新日志](CHANGELOG.md)。
